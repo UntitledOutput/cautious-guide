@@ -16,7 +16,8 @@ void SplatGame::on_init(Engine& engine)
 	mesh = engine.renderer().create_mesh(descriptor);
 
     var shader_descriptor = ShaderDescriptor{};
-    shader_descriptor.vertexSource =
+    shader_descriptor.vertexSource = filesys::FilesystemOperator::read_file_str("assets/shaders/basic.vert");
+    shader_descriptor.fragmentSource = filesys::FilesystemOperator::read_file_str("assets/shaders/basic.frag");
 
     shader = engine.renderer().create_shader()
 

@@ -11,6 +11,7 @@
 #include <core/window.hpp>
 #include <core/ecs.hpp>
 #include "graphics/render.hpp"
+#include <core/file.hpp>
 
 struct Engine;
 
@@ -29,6 +30,7 @@ struct EngineConfiguration
 {
     WindowDescription window;
     RenderConfiguration renderer;
+    FilesystemConfiguration filesystem;
     double tick_rate = 60.0;
 
 };
@@ -61,6 +63,7 @@ private:
     EngineConfiguration _cfg;
     SDLContext _sdl;
 
+    std::unique_ptr<FilesystemOperator> _filesystem;
     std::unique_ptr<Window> _window;
     std::unique_ptr<RenderMgr> _renderMgr;
     //std::unique_ptr<WorldMgr> _worldMgr;
