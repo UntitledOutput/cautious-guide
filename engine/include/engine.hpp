@@ -13,7 +13,7 @@
 #include "graphics/render.hpp"
 #include <core/file.hpp>
 
-struct Engine;
+class Engine;
 
 class GameCtrl
 {
@@ -30,7 +30,7 @@ struct EngineConfiguration
 {
     WindowDescription window;
     RenderConfiguration renderer;
-    FilesystemConfiguration filesystem;
+    filesys::FilesystemConfiguration filesystem;
     double tick_rate = 60.0;
 
 };
@@ -39,12 +39,13 @@ struct EngineConfiguration
 class Engine
 {
 public:
-    explicit Engine(const EngineConfiguration& cfg);
+    explicit Engine(EngineConfiguration cfg);
     ~Engine() = default;
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
     RenderMgr& renderer() ret(*_renderMgr);
+    filesys::FilesystemOperator& filesystem() ret(*_filesystem);
 
     int start(GameCtrl& game);
     void quit() { _running = false; }
@@ -65,7 +66,7 @@ private:
     EngineConfiguration _cfg;
     SDLContext _sdl;
 
-    std::unique_ptr<FilesystemOperator> _filesystem;
+    std::unique_ptr<filesys::FilesystemOperator> _filesystem;
     std::unique_ptr<Window> _window;
     std::unique_ptr<RenderMgr> _renderMgr;
     //std::unique_ptr<WorldMgr> _worldMgr;

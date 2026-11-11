@@ -34,17 +34,24 @@ public: \
     n(const n&) = delete; \
     n& operator=(const n&) = delete; \
 
+#define class_def_no_destructor(n, ...) \
+public: \
+    explicit n(__VA_ARGS__); \
+    ~n(); \
+    n(const n&) = delete; \
+    n& operator=(const n&) = delete; \
+
 #define vcontains(s, v) (std::find(s.begin(), s.end(), v) != s.end())
 
 namespace util {
 
-    std::string guid()
+    inline std::string guid()
     {
         static std::string buf;
         static u32 counter = 0;
         buf = "gui" + std::to_string(counter++);
 
-        hash<std::string> hasher;
+        std::hash<std::string> hasher;
 
         buf += std::to_string(hasher(buf));
 

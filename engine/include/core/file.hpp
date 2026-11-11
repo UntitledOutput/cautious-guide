@@ -1,6 +1,6 @@
 #pragma once
 
-#include <util.hpp>
+#include <core/util.hpp>
 #include <string>
 #include <filesystem>
 #include <span>
@@ -64,7 +64,7 @@ namespace filesys
     };
 
     class FilesystemOperator {
-        class_def(FilesystemOperator, FilesystemConfiguration cfg)
+        class_def(FilesystemOperator, FilesystemConfiguration&& cfg)
 
         void set_local_path(std::string directory);
 

@@ -1,6 +1,17 @@
-#include "file.hpp"
+#include "core/file.hpp"
+
+#include <istream>
+#include <iostream>
+#include <fstream>
 
 using namespace filesys;
+
+FilesystemOperator::FilesystemOperator(FilesystemConfiguration&& cfg)
+    : _cfg(std::move(cfg)), file_operators(std::move(_cfg.fileOperators))
+{
+    std::cout << "Current working directory: " << std::filesystem::current_path() << std::endl;
+
+}
 
 std::string filesys::FilesystemOperator::read_file_str(std::string path) { 
     var fs_path = std::filesystem::path(path);

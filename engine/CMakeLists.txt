@@ -1,5 +1,6 @@
 find_package(SDL2 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
+find_package(Stb REQUIRED)
 
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
@@ -16,6 +17,7 @@ target_include_directories(engine
 
     ${SDL2_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
+    ${STB_INCLUDE_DIRS}
     include # path to glad.h and khrplatform.h
 )
 

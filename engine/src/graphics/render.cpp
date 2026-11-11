@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <glad/glad.h>
 #include <utility>
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h>
 
 namespace
 {
@@ -22,8 +24,6 @@ namespace
         {VertexFormat::Normal, 3, offsetof(Vertex, normal)},
         {VertexFormat::UV0, 2, offsetof(Vertex, uv0)},
     };
-
-    bool has(VertexFormat fmt, VertexFormat flag) { return (fmt & flag) == flag; }
 
     uin make_buffer(GLsizeiptr bytes)
     {
@@ -80,7 +80,7 @@ namespace
     }
 } // namespace
 
-~GpuShader() { glDeleteProgram(handle); }
+GpuShader::~GpuShader() { glDeleteProgram(handle); }
 GpuShader::GpuShader(GpuShader&& o) noexcept : handle(std::exchange(o.handle,0)) { }
 
 GpuShader& GpuShader::operator=(GpuShader&& o) noexcept
@@ -91,6 +91,16 @@ GpuShader& GpuShader::operator=(GpuShader&& o) noexcept
         handle = std::exchange(o.handle, 0);
     }
     return *this;
+}
+GpuShader::GpuShader(u32 handle) : handle(handle) { }
+
+GpuMaterial::GpuMaterial(u32 shader) : shaderHandle(shader) { }
+
+void GpuMaterial::apply()
+{
+    // todo: set uniforms and other material properties
+    //u32 program = GpuShader(shaders[shaderHandle]).handle;
+    //glUseProgram(program);
 }
 
 RenderMgr::RenderMgr(const RenderConfiguration& cfg)
@@ -114,6 +124,7 @@ ShaderHandle RenderMgr::create_shader(const ShaderDescriptor& descriptor) {
     _shaders[1] = make_shader(GL_FRAGMENT_SHADER,descriptor.fragmentSource.c_str());
 
     shaders.push_back(GpuShader(make_program(_shaders, 2)));
+    return ShaderHandle(shaders.size() - 1);
 }
 
 MaterialHandle RenderMgr::create_material(const ShaderHandle& handle)
@@ -191,16 +202,14 @@ void RenderMgr::screenshot(std::string filename)
     char *data = (char*) malloc((size_t) (width * height * 3)); // 3 components (R, G, B)
 
     if (!data)
-        return 0;
+        return;
 
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(x, y, width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
 
-    int saved = stbi_write_png(filename.c_str(), width, height, 3, data, 0);
+    stbi_write_png(filename.c_str(), width, height, 3, data, 0);
 
     free(data);
-
-    return saved;
 }
 
 void RenderMgr::flush()
@@ -220,14 +229,14 @@ void RenderMgr::flush()
     {
         const GpuMesh& mesh = meshes[dc.mesh];
 
-        const GpuMaterial& material = materials[dc.material];
+        GpuMaterial& material = materials[dc.material];
         u32 program = shaders[material.shaderHandle].handle;
         if (program != curProgram)
         {
             glUseProgram(program);
             curProgram = program;
         }
-        material.apply();
+        const_cast<GpuMaterial&>(material).apply();
 
         const uin vao = pools.at(mesh.fmt).vao;
         if (vao != curVao)
