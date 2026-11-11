@@ -13,6 +13,11 @@ FilesystemOperator::FilesystemOperator(FilesystemConfiguration&& cfg)
 
 }
 
+void FilesystemOperator::register_file_operator(std::unique_ptr<FileOperator> operator_)
+{
+    file_operators.push_back(operator_);
+}
+
 std::string filesys::FilesystemOperator::read_file_str(std::string path) { 
     var fs_path = std::filesystem::path(path);
     if (!std::filesystem::exists(fs_path))

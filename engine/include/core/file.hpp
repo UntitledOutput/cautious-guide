@@ -52,9 +52,10 @@ namespace filesys
         class_def(FileOperator,std::span<std::string> exts)
         std::span<std::string> extensions;
         FileType operationType;
+        void* enginePtr;
 
-        virtual void* onFileString(std::string data) {}
-        virtual void* onFileBytes(byte* data) {}
+        virtual void* onFileString(std::string data) { return nullptr; }
+        virtual void* onFileBytes(byte* data) { return nullptr; }
 
     };
 
@@ -67,6 +68,7 @@ namespace filesys
         class_def(FilesystemOperator, FilesystemConfiguration&& cfg)
 
         void set_local_path(std::string directory);
+        void register_file_operator(std::unique_ptr<FileOperator> operator_);
 
         std::string read_file_str(std::string path);
         byte* read_file_bytes(std::string path);

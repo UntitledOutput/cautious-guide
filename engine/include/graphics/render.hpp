@@ -5,76 +5,96 @@
 #include <vector>
 #include <unordered_map>
 #include <span>
+#include <glad/glad.h>
 
-using MeshHandle = u32;
-using MaterialHandle = u32;
-using ShaderHandle = u32;
+#include "texture.hpp"
 
-struct MeshDescriptor
+namespace graphics
 {
-    VertexFormat format;
-    std::span<const Vertex> vertices;
-    std::span<const u32> indices;
-};
 
-struct ShaderDescriptor
-{
-    std::string vertexSource;
-    std::string fragmentSource;
-};
 
-struct DrawCall
-{
-    u32 mesh;
-    u32 material;
+    using MeshHandle = u32;
+    using MaterialHandle = u32;
+    using ShaderHandle = u32;
+    using TextureHandle = u32;
 
-    // todo: instancing and draw order
-};
-
-struct RenderConfiguration
-{
-    u32 maxDrawCalls = UINT32_MAX;
-    u32 maxMaterials = UINT32_MAX;
-};
-
-class RenderMgr
-{
-public:
-    explicit RenderMgr(const RenderConfiguration& cfg);
-    ~RenderMgr();
-    RenderMgr(const RenderMgr&) = delete;
-    RenderMgr& operator=(const RenderMgr&) = delete;
-
-    ShaderHandle create_shader(const ShaderDescriptor& descriptor);
-    MaterialHandle create_material(const ShaderHandle& shader);
-    MeshHandle create_mesh(const MeshDescriptor& descriptor);
-    void submit_draw_call(const DrawCall& drawCall);
-
-    void screenshot(std::string filename);
-
-    void flush(); // render all draw calls and clear
-
-private:
-    struct FormatPool
+    struct MeshDescriptor
     {
-        uin vao = 0, vbo = 0, ibo = 0;
-        u32 vertexCt = 0, indexCt = 0;
-        u32 vertexCap = 0, indexCap = 0;
+        VertexFormat format;
+        std::span<const Vertex> vertices;
+        std::span<const u32> indices;
     };
 
-    struct GpuMesh
+    struct ShaderDescriptor
     {
-        VertexFormat fmt;
-        u32 base_vtx, first_idx, idx;
+        std::string vertexSource;
+        std::string fragmentSource;
     };
 
-    FormatPool& get_pool(VertexFormat fmt);
+    struct TextureDescriptor
+    {
+        int width;
+        int height;
+        std::span<byte> data;
+        u32 format;
+    };
 
-    RenderConfiguration cfg;
+    struct DrawCall
+    {
+        u32 mesh;
+        u32 material;
 
-    std::vector<DrawCall> drawCalls;
-    std::vector<GpuMesh> meshes;
-    std::vector<GpuMaterial> materials;
-    std::vector<GpuShader> shaders;
-    std::unordered_map<VertexFormat, FormatPool> pools;
-};
+        // todo: instancing and draw order
+    };
+
+    struct RenderConfiguration
+    {
+        u32 maxDrawCalls = UINT32_MAX;
+        u32 maxMaterials = UINT32_MAX;
+    };
+
+    class RenderMgr
+    {
+    public:
+        explicit RenderMgr(const RenderConfiguration& cfg);
+        ~RenderMgr();
+        RenderMgr(const RenderMgr&) = delete;
+        RenderMgr& operator=(const RenderMgr&) = delete;
+
+        ShaderHandle create_shader(const ShaderDescriptor& descriptor);
+        MaterialHandle create_material(const ShaderHandle& shader);
+        MeshHandle create_mesh(const MeshDescriptor& descriptor);
+        TextureHandle create_texture(TextureDescriptor descriptor);
+        void submit_draw_call(const DrawCall& drawCall);
+
+        void screenshot(std::string filename);
+
+        void flush(); // render all draw calls and clear
+
+    private:
+        struct FormatPool
+        {
+            uin vao = 0, vbo = 0, ibo = 0;
+            u32 vertexCt = 0, indexCt = 0;
+            u32 vertexCap = 0, indexCap = 0;
+        };
+
+        struct GpuMesh
+        {
+            VertexFormat fmt;
+            u32 base_vtx, first_idx, idx;
+        };
+
+        FormatPool& get_pool(VertexFormat fmt);
+
+        RenderConfiguration cfg;
+
+        std::vector<DrawCall> drawCalls;
+        std::vector<GpuMesh> meshes;
+        std::vector<GpuMaterial> materials;
+        std::vector<GpuShader> shaders;
+        std::vector<GpuTexture> textures;
+        std::unordered_map<VertexFormat, FormatPool> pools;
+    };
+
+} // namespace graphics

@@ -6,6 +6,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image_write.h>
 
+
+
 namespace
 {
     constexpr u32 initial_vertex_cap = 1 << 16;
@@ -56,6 +58,17 @@ namespace
         return program;
     }
 
+    uin make_texture(int width, int height, GLenum format, byte* data)
+    { 
+        uin texture = 0;
+        glGenTextures(1, &texture);
+
+        glBindTexture(GL_TEXTURE_2D, texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        return texture;
+    }
+
     // immutable storage can't be resized, so allocate a bigger one and copy over
     uin grow_buffer(uin old, GLsizeiptr usedBytes, GLsizeiptr newBytes)
     {
@@ -79,6 +92,8 @@ namespace
         return cap;
     }
 } // namespace
+
+using namespace graphics;
 
 GpuShader::~GpuShader() { glDeleteProgram(handle); }
 GpuShader::GpuShader(GpuShader&& o) noexcept : handle(std::exchange(o.handle,0)) { }
@@ -104,7 +119,9 @@ void GpuMaterial::apply()
 }
 
 RenderMgr::RenderMgr(const RenderConfiguration& cfg)
-{ drawCalls.reserve(1024); }
+{
+    drawCalls.reserve(1024);
+}
 
 RenderMgr::~RenderMgr()
 {
@@ -177,6 +194,13 @@ MeshHandle RenderMgr::create_mesh(const MeshDescriptor& descriptor)
     pool.indexCt += idxCount;
 
     return MeshHandle(meshes.size() - 1);
+}
+
+TextureHandle RenderMgr::create_texture(TextureDescriptor descriptor)
+{
+    textures.push_back(
+        GpuTexture(make_texture(descriptor.width, descriptor.height, descriptor.format, descriptor.data.data())));
+    return TextureHandle(textures.size() - 1);
 }
 
 void RenderMgr::submit_draw_call(const DrawCall& drawCall)

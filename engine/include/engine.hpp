@@ -29,7 +29,7 @@ public:
 struct EngineConfiguration
 {
     WindowDescription window;
-    RenderConfiguration renderer;
+    graphics::RenderConfiguration renderer;
     filesys::FilesystemConfiguration filesystem;
     double tick_rate = 60.0;
 
@@ -44,7 +44,7 @@ public:
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
-    RenderMgr& renderer() ret(*_renderMgr);
+    graphics::RenderMgr& renderer() ret(*_renderMgr);
     filesys::FilesystemOperator& filesystem() ret(*_filesystem);
 
     int start(GameCtrl& game);
@@ -53,6 +53,8 @@ public:
     int frame_count() ret(_frame_count);
 
 private:
+
+    void setup_file_operators();
 
     struct SDLContext
     {
@@ -68,7 +70,7 @@ private:
 
     std::unique_ptr<filesys::FilesystemOperator> _filesystem;
     std::unique_ptr<Window> _window;
-    std::unique_ptr<RenderMgr> _renderMgr;
+    std::unique_ptr<graphics::RenderMgr> _renderMgr;
     //std::unique_ptr<WorldMgr> _worldMgr;
 
 
