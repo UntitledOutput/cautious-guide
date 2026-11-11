@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <glad/glad.h>
+#include <utility>
 
 namespace
 {
@@ -52,6 +53,7 @@ namespace
         for (int i = 0; i < shader_count; i++) {
             glDeleteShader(shaders[i]);
         }
+        return program;
     }
 
     // immutable storage can't be resized, so allocate a bigger one and copy over
@@ -78,6 +80,18 @@ namespace
     }
 } // namespace
 
+~GpuShader() { glDeleteProgram(handle); }
+GpuShader::GpuShader(GpuShader&& o) noexcept : handle(std::exchange(o.handle,0)) { }
+
+GpuShader& GpuShader::operator=(GpuShader&& o) noexcept
+{
+    if (this != &o)
+    {
+        glDeleteProgram(handle);
+        handle = std::exchange(o.handle, 0);
+    }
+    return *this;
+}
 
 RenderMgr::RenderMgr(const RenderConfiguration& cfg)
 { drawCalls.reserve(1024); }
@@ -99,12 +113,12 @@ ShaderHandle RenderMgr::create_shader(const ShaderDescriptor& descriptor) {
     _shaders[0] = make_shader(GL_VERTEX_SHADER,descriptor.vertexSource.c_str());
     _shaders[1] = make_shader(GL_FRAGMENT_SHADER,descriptor.fragmentSource.c_str());
 
-    shaders.push_back(GpuShader(make_program(_shaders, 2)))
+    shaders.push_back(GpuShader(make_program(_shaders, 2)));
 }
 
 MaterialHandle RenderMgr::create_material(const ShaderHandle& handle)
 {
-    materials.push_back(GpuMaterial(shaders.at((u32)handle)));
+    materials.push_back(GpuMaterial(u32(handle)));
 
     return MaterialHandle(materials.size() - 1);
 }
@@ -182,7 +196,7 @@ void RenderMgr::flush()
         const GpuMesh& mesh = meshes[dc.mesh];
 
         const GpuMaterial& material = materials[dc.material];
-        program = shaders[material.shaderHandle].handle;
+        u32 program = shaders[material.shaderHandle].handle;
         if (program != curProgram)
         {
             glUseProgram(program);

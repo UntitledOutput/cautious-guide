@@ -6,6 +6,9 @@ class RenderMgr;
 class GpuShader {
     class_def(GpuShader,u32 handle)
 
+    GpuShader(GpuShader&& o) noexcept;
+    GpuShader& operator=(GpuShader&& o) noexcept;
+
 private:
     friend RenderMgr;
     u32 handle;
@@ -13,7 +16,7 @@ private:
 
 class GpuMaterial
 {
-    class_def(GpuMaterial, GpuShader& shader)
+    class_def(GpuMaterial, u32 shader)
 
     void apply();
 
