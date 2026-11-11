@@ -23,3 +23,9 @@ using fltc = const float;
 
 #define throw_error(msg) throw std::runtime_error(msg)
 #define has(e, f) ((e & f) == f)
+
+#define class_def(n,a...) \
+    explicit n(a); \
+    ~n() = default; \
+    n(const n&) = delete; \
+    n& operator=(const n&) = delete; \
