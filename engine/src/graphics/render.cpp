@@ -91,6 +91,91 @@ namespace
             cap *= 2;
         return cap;
     }
+
+        constexpr GLuint material_binding = 0;
+
+    u32 gl_type_size(GLenum type)
+    {
+        switch (type)
+        {
+            case GL_FLOAT:
+            case GL_INT:
+            case GL_UNSIGNED_INT:
+            case GL_BOOL:
+                return 4;
+            case GL_FLOAT_VEC2:
+                return 8;
+            case GL_FLOAT_VEC3:
+                return 12;
+            case GL_FLOAT_VEC4:
+                return 16;
+            case GL_FLOAT_MAT4:
+                return 64;
+            default:
+                return 0;
+        }
+    }
+
+    bool is_sampler(GLenum type)
+    {
+        return type == GL_SAMPLER_2D || type == GL_SAMPLER_2D_ARRAY || type == GL_SAMPLER_CUBE;
+    }
+
+    std::string resource_name(uin program, GLenum iface, GLuint index, GLint len)
+    {
+        std::string name(len, '\0');
+        glGetProgramResourceName(program, iface, index, len, nullptr, name.data());
+        name.resize(len - 1);
+        return name;
+    }
+
+    graphics::ShaderLayout reflect(uin program)
+    {
+        graphics::ShaderLayout layout;
+
+        GLuint block = glGetProgramResourceIndex(program, GL_UNIFORM_BLOCK, "Material");
+        if (block != GL_INVALID_INDEX)
+        {
+            glUniformBlockBinding(program, block, material_binding);
+
+            const GLenum blockProps[] = {GL_BUFFER_DATA_SIZE, GL_NUM_ACTIVE_VARIABLES};
+            GLint blockInfo[2];
+            glGetProgramResourceiv(program, GL_UNIFORM_BLOCK, block, 2, blockProps, 2, nullptr, blockInfo);
+            layout.blockSize = u32(blockInfo[0]);
+
+            std::vector<GLint> vars(blockInfo[1]);
+            const GLenum activeVars = GL_ACTIVE_VARIABLES;
+            glGetProgramResourceiv(program, GL_UNIFORM_BLOCK, block, 1, &activeVars, GLsizei(vars.size()), nullptr,
+                                   vars.data());
+
+            for (GLint v : vars)
+            {
+                const GLenum props[] = {GL_OFFSET, GL_TYPE, GL_NAME_LENGTH};
+                GLint info[3];
+                glGetProgramResourceiv(program, GL_UNIFORM, v, 3, props, 3, nullptr, info);
+                layout.params[resource_name(program, GL_UNIFORM, v, info[2])] = {u32(info[0]), gl_type_size(info[1]),
+                                                                                 u32(info[1])};
+            }
+        }
+
+        GLint count = 0;
+        glGetProgramInterfaceiv(program, GL_UNIFORM, GL_ACTIVE_RESOURCES, &count);
+        u32 unit = 0;
+        for (GLint i = 0; i < count; ++i)
+        {
+            const GLenum props[] = {GL_TYPE, GL_BLOCK_INDEX, GL_LOCATION, GL_NAME_LENGTH};
+            GLint info[4];
+            glGetProgramResourceiv(program, GL_UNIFORM, i, 4, props, 4, nullptr, info);
+            if (info[1] != -1 || !is_sampler(info[0]))
+                continue;
+
+            glProgramUniform1i(program, info[2], GLint(unit));
+            layout.samplers[resource_name(program, GL_UNIFORM, i, info[3])] = unit++;
+        }
+
+        return layout;
+    }
+
 } // namespace
 
 using namespace graphics;
@@ -109,18 +194,14 @@ GpuShader& GpuShader::operator=(GpuShader&& o) noexcept
 }
 GpuShader::GpuShader(u32 handle) : handle(handle) { }
 
-GpuMaterial::GpuMaterial(u32 shader) : shaderHandle(shader) { }
-
-void GpuMaterial::apply()
-{
-    // todo: set uniforms and other material properties
-    //u32 program = GpuShader(shaders[shaderHandle]).handle;
-    //glUseProgram(program);
-}
 
 RenderMgr::RenderMgr(const RenderConfiguration& cfg)
 {
     drawCalls.reserve(1024);
+
+    GLint align = 0;
+    glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &align);
+    materialStride = std::max<u32>(256, u32(align));
 }
 
 RenderMgr::~RenderMgr()
@@ -139,16 +220,38 @@ ShaderHandle RenderMgr::create_shader(const ShaderDescriptor& descriptor) {
     uin* _shaders = new uin[2]; // todo: allow multiple stages
     _shaders[0] = make_shader(GL_VERTEX_SHADER,descriptor.vertexSource.c_str());
     _shaders[1] = make_shader(GL_FRAGMENT_SHADER,descriptor.fragmentSource.c_str());
+    
+    GpuShader shader(make_program(_shaders, 2));
+    shader.layout = reflect(shader.handle);
+    if (shader.layout.blockSize > materialStride)
+        throw_error("material block is bigger than the material stride");
+    shaders.push_back(std::move(shader));
 
-    shaders.push_back(GpuShader(make_program(_shaders, 2)));
     return ShaderHandle(shaders.size() - 1);
 }
 
 MaterialHandle RenderMgr::create_material(const ShaderHandle& handle)
 {
-    materials.push_back(GpuMaterial(u32(handle)));
+    const ShaderLayout& layout = shaders[handle].layout;
+    const u32 index = u32(materials.size());
 
-    return MaterialHandle(materials.size() - 1);
+    if (index > materialCap)
+    {
+        const u32 cap = materialCap ? materialCap* 2 : 256;
+        materialBuffer = materialBuffer
+            ? grow_buffer(materialBuffer, materialCap * materialStride, cap * materialStride)
+            : make_buffer(cap * materialStride);
+        materialCap = cap;
+    }
+
+    Material m{};
+    m.shader = handle;
+    m.params.resize(layout.blockSize);
+    m.textures.resize(layout.samplers.size(), 0);
+    m.gpuOffset = index * materialStride;
+    materials.push_back(std::move(m));
+
+    return MaterialHandle(index);
 }
 
 MeshHandle RenderMgr::create_mesh(const MeshDescriptor& descriptor)
@@ -238,6 +341,7 @@ void RenderMgr::screenshot(std::string filename)
 
 void RenderMgr::flush()
 {
+    upload_materials();
     std::sort(drawCalls.begin(), drawCalls.end(),
               [this](const DrawCall& a, const DrawCall& b)
               {
@@ -248,19 +352,34 @@ void RenderMgr::flush()
 
     uin curProgram = 0;
     uin curVao = 0;
+    u32 curMaterial = 0;
 
     for (const DrawCall& dc : drawCalls)
     {
         const GpuMesh& mesh = meshes[dc.mesh];
 
-        GpuMaterial& material = materials[dc.material];
-        u32 program = shaders[material.shaderHandle].handle;
+        Material& material = materials[dc.material];
+        u32 program = shaders[material.shader].handle;
         if (program != curProgram)
         {
             glUseProgram(program);
             curProgram = program;
         }
-        const_cast<GpuMaterial&>(material).apply();
+        if (dc.material != curMaterial)
+        {
+            const Material& m = materials[dc.material];
+
+            if (!m.params.empty())
+                glBindBufferRange(GL_UNIFORM_BUFFER, material_binding, materialBuffer, m.gpuOffset, m.params.size());
+
+            for (u32 unit = 0; unit < m.textures.size(); ++unit)
+            {
+                glActiveTexture(GL_TEXTURE0 + unit);
+                glBindTexture(GL_TEXTURE_2D, textures[m.textures[unit]].handle);
+            }
+
+            curMaterial = dc.material; // u32 curMaterial = UINT32_MAX; before the loop
+        }
 
         const uin vao = pools.at(mesh.fmt).vao;
         if (vao != curVao)
@@ -314,4 +433,15 @@ RenderMgr::FormatPool& RenderMgr::get_pool(VertexFormat fmt)
     glBindVertexArray(0);
 
     return pools.emplace(fmt, pool).first->second;
+}
+
+void RenderMgr::upload_materials()
+{
+    for (Material& m : materials)
+    {
+        if (!m.dirty || m.params.empty())
+            continue;
+        upload(materialBuffer, m.gpuOffset, GLsizeiptr(m.params.size()), m.params.data());
+        m.dirty = false;
+    }
 }

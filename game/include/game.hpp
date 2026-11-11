@@ -7,7 +7,8 @@ struct SplatGame : GameCtrl
 	void on_render(Engine&, double alpha) override;
 
 private:
-    MeshHandle mesh;
-    MaterialHandle mat;
-    ShaderHandle shader;
+    graphics::MeshHandle mesh;
+    graphics::MaterialHandle mat;
+    graphics::ShaderHandle shader;
+    graphics::TextureHandle tex;
 };

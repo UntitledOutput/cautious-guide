@@ -15,7 +15,7 @@ FilesystemOperator::FilesystemOperator(FilesystemConfiguration&& cfg)
 
 void FilesystemOperator::register_file_operator(std::unique_ptr<FileOperator> operator_)
 {
-    file_operators.push_back(operator_);
+    file_operators.push_back(std::move(operator_));
 }
 
 std::string filesys::FilesystemOperator::read_file_str(std::string path) { 
@@ -33,13 +33,12 @@ std::string filesys::FilesystemOperator::read_file_str(std::string path) {
     return content;
 }
 
-byte* filesys::FilesystemOperator::read_file_bytes(std::string path) { 
-    // byte* is just an alias for unsigned char*, so we can use it directly
+byte* filesys::FilesystemOperator::read_file_bytes(std::string path, int* out_size) { 
     var fs_path = std::filesystem::path(path);
     if (!std::filesystem::exists(fs_path))
         throw_error("file does not exist: " + path);
 
-    std::ifstream file(fs_path, std::ios::in);
+    std::ifstream file(fs_path, std::ios::in | std::ios::binary);
     if (!file.is_open())
         throw_error("failed to open file: " + path);
 
@@ -49,11 +48,10 @@ byte* filesys::FilesystemOperator::read_file_bytes(std::string path) {
 
     byte* buffer = new byte[size];
     if (!file.read(reinterpret_cast<char*>(buffer), size))
-    {
-        delete[] buffer;
         throw_error("failed to read file: " + path);
-    }
-    file.close();
+
+    *out_size = static_cast<int>(size);
+
     return buffer;
 }
 
@@ -62,8 +60,10 @@ void* filesys::FilesystemOperator::read_file_auto(std::string path) {
 
     if (_operator.operationType == FileType::String)
         return _operator.onFileString(read_file_str(path));
-    else
-        return _operator.onFileBytes(read_file_bytes(path));
+
+    int size = 0;
+    var bytes = read_file_bytes(path, &size);
+    return _operator.onFileBytes(bytes, size);
 }
 
 FileOperator& filesys::FilesystemOperator::get_file_operator(std::string ext)

@@ -22,3 +22,7 @@ add_custom_command(TARGET game POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/runtime_dir"
         "$<TARGET_FILE_DIR:game>"
 )
+
+set_target_properties(game PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:game>"
+)

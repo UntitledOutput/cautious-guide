@@ -60,6 +60,29 @@ namespace graphics
         ~RenderMgr();
         RenderMgr(const RenderMgr&) = delete;
         RenderMgr& operator=(const RenderMgr&) = delete;
+        
+        template<typename T>
+        void set_material_param(MaterialHandle h, std::string_view name, const T& value)
+        {
+            Material& m = materials[h];
+            const auto& params = shaders[m.shader].layout.params;
+            auto it = params.find(std::string(name));
+            if (it == params.end())
+                return; // BFRES materials carry params your shader may not use
+            if (sizeof(T) > it->second.size)
+                throw_error("param type doesn't match the shader");
+
+            std::memcpy(m.params.data() + it->second.offset, &value, sizeof(T));
+            m.dirty = true;
+        }
+
+        void set_material_texture(MaterialHandle h, std::string_view sampler, TextureHandle texture)
+        {
+            Material& m = materials[h];
+            const auto& samplers = shaders[m.shader].layout.samplers;
+            if (auto it = samplers.find(std::string(sampler)); it != samplers.end())
+                m.textures[it->second] = texture;
+        }
 
         ShaderHandle create_shader(const ShaderDescriptor& descriptor);
         MaterialHandle create_material(const ShaderHandle& shader);
@@ -87,11 +110,17 @@ namespace graphics
 
         FormatPool& get_pool(VertexFormat fmt);
 
+        void upload_materials();
+
         RenderConfiguration cfg;
+
+        uin materialBuffer = 0;
+        u32 materialStride = 256;
+        u32 materialCap = 0;
 
         std::vector<DrawCall> drawCalls;
         std::vector<GpuMesh> meshes;
-        std::vector<GpuMaterial> materials;
+        std::vector<Material> materials;
         std::vector<GpuShader> shaders;
         std::vector<GpuTexture> textures;
         std::unordered_map<VertexFormat, FormatPool> pools;

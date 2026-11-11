@@ -21,10 +21,10 @@ target_include_directories(engine
     include # path to glad.h and khrplatform.h
 )
 
-target_link_libraries(engine PRIVATE
-    OpenGL::GL
-    glad
-)
+target_link_libraries(engine PRIVATE OpenGL::GL)
+
+# render.hpp includes glad, so anything including engine headers needs it too
+target_link_libraries(engine PUBLIC glad)
 
 target_link_libraries(engine PUBLIC
     $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>

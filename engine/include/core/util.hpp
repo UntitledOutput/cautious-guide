@@ -41,6 +41,13 @@ public: \
     n(const n&) = delete; \
     n& operator=(const n&) = delete; \
 
+#define virt_class_def(n, ...)                                                                                              \
+public:                                                                                                                \
+    n(__VA_ARGS__) {}                                                                                     \
+    virtual ~n() {}                                                                                                    \
+    n(const n&) = delete;                                                                                              \
+    n& operator=(const n&) = delete; \
+
 #define vcontains(s, v) (std::find(s.begin(), s.end(), v) != s.end())
 
 namespace util {
