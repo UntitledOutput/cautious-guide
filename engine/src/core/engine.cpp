@@ -65,6 +65,7 @@ int Engine::start(GameCtrl& game)
         game.on_render(*this, frame);
         _renderMgr->flush();
         _window->swap();
+        _frame_count++;
     }
 
     game.on_shutdown(*this);

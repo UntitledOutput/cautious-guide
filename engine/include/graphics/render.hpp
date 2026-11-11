@@ -50,6 +50,8 @@ public:
     MeshHandle create_mesh(const MeshDescriptor& descriptor);
     void submit_draw_call(const DrawCall& drawCall);
 
+    void screenshot(std::string filename);
+
     void flush(); // render all draw calls and clear
 
 private:

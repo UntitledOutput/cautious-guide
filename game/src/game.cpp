@@ -26,5 +26,6 @@ void SplatGame::on_init(Engine& engine)
 
 void SplatGame::on_render(Engine& engine, double alpha)
 {
-
+    if (engine.frame_count() == 100)
+        engine.renderer().screenshot("screenshot.png");
 }

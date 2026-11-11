@@ -49,6 +49,8 @@ public:
     int start(GameCtrl& game);
     void quit() { _running = false; }
 
+    int frame_count() ret(_frame_count);
+
 private:
 
     struct SDLContext
@@ -68,6 +70,8 @@ private:
     std::unique_ptr<RenderMgr> _renderMgr;
     //std::unique_ptr<WorldMgr> _worldMgr;
 
+
+    int _frame_count = 0;
     bool _running = true;
 };
 
