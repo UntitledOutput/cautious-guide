@@ -10,6 +10,8 @@ class TextureFileOperator : public filesys::FileOperator
 public:
     void* onFileBytes(byte* data, int dataSize) override
     {
+        stbi_set_flip_vertically_on_load(true);
+
         int width, height, channels;
         byte* image = stbi_load_from_memory(data, (dataSize), &width, &height, &channels, 0);
         if (!image)

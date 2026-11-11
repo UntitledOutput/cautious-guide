@@ -13,6 +13,10 @@ namespace
     constexpr u32 initial_vertex_cap = 1 << 16;
     constexpr u32 initial_index_cap = 1 << 18;
 
+    constexpr GLuint material_binding = 0;
+    constexpr GLuint camera_binding = 1;
+    constexpr GLuint object_binding = 2;
+
     struct AttribInfo
     {
         VertexFormat flag;
@@ -92,7 +96,6 @@ namespace
         return cap;
     }
 
-        constexpr GLuint material_binding = 0;
 
     u32 gl_type_size(GLenum type)
     {
@@ -158,6 +161,15 @@ namespace
             }
         }
 
+        auto bind_block = [&](const char* name, GLuint binding)
+        {
+            GLuint idx = glGetProgramResourceIndex(program, GL_UNIFORM_BLOCK, name);
+            if (idx != GL_INVALID_INDEX)
+                glUniformBlockBinding(program, idx, binding);
+        };
+        bind_block("Camera", camera_binding);
+        bind_block("Object", object_binding);
+
         GLint count = 0;
         glGetProgramInterfaceiv(program, GL_UNIFORM, GL_ACTIVE_RESOURCES, &count);
         u32 unit = 0;
@@ -202,6 +214,9 @@ RenderMgr::RenderMgr(const RenderConfiguration& cfg)
     GLint align = 0;
     glGetIntegerv(GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT, &align);
     materialStride = std::max<u32>(256, u32(align));
+
+    cameraBuffer = make_buffer(sizeof(CameraData));
+    glBindBufferBase(GL_UNIFORM_BUFFER, camera_binding, cameraBuffer);
 }
 
 RenderMgr::~RenderMgr()
@@ -235,7 +250,7 @@ MaterialHandle RenderMgr::create_material(const ShaderHandle& handle)
     const ShaderLayout& layout = shaders[handle].layout;
     const u32 index = u32(materials.size());
 
-    if (index > materialCap)
+    if (index >= materialCap)
     {
         const u32 cap = materialCap ? materialCap* 2 : 256;
         materialBuffer = materialBuffer
@@ -341,6 +356,12 @@ void RenderMgr::screenshot(std::string filename)
 
 void RenderMgr::flush()
 {
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    upload(cameraBuffer, 0, sizeof(CameraData), &camera_);
     upload_materials();
     std::sort(drawCalls.begin(), drawCalls.end(),
               [this](const DrawCall& a, const DrawCall& b)
@@ -350,12 +371,27 @@ void RenderMgr::flush()
                   return meshes[a.mesh].fmt < meshes[b.mesh].fmt;
               });
 
+    const u32 count = u32(drawCalls.size());
+    if (count > objectCap)
+    {
+        if (objectBuffer)
+            glDeleteBuffers(1, &objectBuffer);
+        objectCap = grow_cap(std::max(objectCap, 256u), count);
+        objectBuffer = make_buffer(GLsizeiptr(objectCap) * materialStride);
+    }
+
+    objectStaging.resize(size_t(count) * materialStride);
+    for (u32 i = 0; i < count; ++i)
+        std::memcpy(objectStaging.data() + size_t(i) * materialStride, &drawCalls[i].model, sizeof(math::mat4));
+    upload(objectBuffer, 0, GLsizeiptr(objectStaging.size()), objectStaging.data());
+
     uin curProgram = 0;
     uin curVao = 0;
-    u32 curMaterial = 0;
+    u32 curMaterial = UINT32_MAX;
 
-    for (const DrawCall& dc : drawCalls)
+    for (u32 i = 0; i < count; ++i)
     {
+        const DrawCall& dc = drawCalls[i];
         const GpuMesh& mesh = meshes[dc.mesh];
 
         Material& material = materials[dc.material];
@@ -387,6 +423,9 @@ void RenderMgr::flush()
             glBindVertexArray(vao);
             curVao = vao;
         }
+
+        glBindBufferRange(GL_UNIFORM_BUFFER, object_binding, objectBuffer, GLintptr(i) * materialStride,
+                      sizeof(math::mat4));
 
         glDrawElementsInstancedBaseVertexBaseInstance(
             GL_TRIANGLES, GLsizei(mesh.idx), GL_UNSIGNED_INT,

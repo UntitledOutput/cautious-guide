@@ -7,6 +7,7 @@
 #include <span>
 #include <glad/glad.h>
 
+#include "camera.hpp"
 #include "texture.hpp"
 
 namespace graphics
@@ -43,7 +44,7 @@ namespace graphics
     {
         u32 mesh;
         u32 material;
-
+        math::mat4 model;
         // todo: instancing and draw order
     };
 
@@ -83,6 +84,8 @@ namespace graphics
             if (auto it = samplers.find(std::string(sampler)); it != samplers.end())
                 m.textures[it->second] = texture;
         }
+        
+        void set_camera(const CameraData& cam) { camera_ = cam; }
 
         ShaderHandle create_shader(const ShaderDescriptor& descriptor);
         MaterialHandle create_material(const ShaderHandle& shader);
@@ -124,6 +127,12 @@ namespace graphics
         std::vector<GpuShader> shaders;
         std::vector<GpuTexture> textures;
         std::unordered_map<VertexFormat, FormatPool> pools;
+
+        CameraData camera_{};
+        uin cameraBuffer = 0;
+        uin objectBuffer = 0;
+        u32 objectCap = 0;
+        std::vector<byte> objectStaging;
     };
 
 } // namespace graphics

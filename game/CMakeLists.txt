@@ -17,11 +17,12 @@ target_link_libraries(game PRIVATE engine)
 
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${GAME_SOURCES})
 
-add_custom_command(TARGET game POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
+add_custom_target(copy_runtime
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/runtime_dir"
         "$<TARGET_FILE_DIR:game>"
 )
+add_dependencies(game copy_runtime)
 
 set_target_properties(game PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:game>"

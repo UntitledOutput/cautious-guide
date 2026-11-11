@@ -54,12 +54,18 @@ void SplatGame::on_init(Engine& engine)
 
 void SplatGame::on_render(Engine& engine, double alpha)
 {
-    if (engine.frame_count() == 100)
-        engine.renderer().screenshot("screenshot.png");
+    var eye = math::vec3{2.0f, 1.5f, 3.0f};
+
+    var cam = graphics::CameraData{};
+    cam.view = math::look_at(eye, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+    cam.projection = math::perspective(1.047f, 16.0f / 9.0f, 0.1f, 500.0f); // 60 degrees
+    cam.viewProjection = cam.projection * cam.view;
+    cam.position = {eye.x, eye.y, eye.z, 1.0f};
+    engine.renderer().set_camera(cam);
 
     var drawCall = graphics::DrawCall{};
     drawCall.mesh = mesh;
     drawCall.material = mat;
-
+    drawCall.model = math::translate({0.0f, 0.0f, 0.0f});
     engine.renderer().submit_draw_call(drawCall);
 }
