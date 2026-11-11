@@ -11,6 +11,7 @@ using dbl = double;
 using flt = float;
 using dblc = const double;
 using fltc = const float;
+using byte = unsigned char;
 
 
 #define cdbl (double)
@@ -24,8 +25,11 @@ using fltc = const float;
 #define throw_error(msg) throw std::runtime_error(msg)
 #define has(e, f) ((e & f) == f)
 
-#define class_def(n,a...) \
-    explicit n(a); \
+#define class_def(n, ...) \
+public: \
+    explicit n(__VA_ARGS__); \
     ~n() = default; \
     n(const n&) = delete; \
     n& operator=(const n&) = delete; \
+
+#define vcontains(s, v) (std::find(s.begin(), s.end(), v) != s.end())

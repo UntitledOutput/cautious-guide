@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vertex.hpp"
+#include "material.hpp"
 #include <vector>
 #include <unordered_map>
 #include <span>
@@ -44,8 +45,8 @@ public:
     RenderMgr(const RenderMgr&) = delete;
     RenderMgr& operator=(const RenderMgr&) = delete;
 
-    ShaderHandle create_shader(const std::string& vertSrc, const std::string& fragSrc);
-    MaterialHandle create_material(uin program);
+    ShaderHandle create_shader(const ShaderDescriptor& descriptor);
+    MaterialHandle create_material(const ShaderHandle& shader);
     MeshHandle create_mesh(const MeshDescriptor& descriptor);
     void submit_draw_call(const DrawCall& drawCall);
 
@@ -71,7 +72,7 @@ private:
 
     std::vector<DrawCall> drawCalls;
     std::vector<GpuMesh> meshes;
-    std::vector<uin> materials;
-    std::vector<uin> shaders;
+    std::vector<GpuMaterial> materials;
+    std::vector<GpuShader> shaders;
     std::unordered_map<VertexFormat, FormatPool> pools;
 };

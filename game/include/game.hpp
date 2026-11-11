@@ -9,4 +9,5 @@ struct SplatGame : GameCtrl
 private:
     MeshHandle mesh;
     MaterialHandle mat;
+    ShaderHandle shader;
 };

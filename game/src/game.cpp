@@ -15,6 +15,11 @@ void SplatGame::on_init(Engine& engine)
 
 	mesh = engine.renderer().create_mesh(descriptor);
 
+    var shader_descriptor = ShaderDescriptor{};
+    shader_descriptor.vertexSource =
+
+    shader = engine.renderer().create_shader()
+
     mat = engine.renderer().create_material()
 }
 

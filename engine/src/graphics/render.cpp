@@ -33,6 +33,27 @@ namespace
         return buf;
     }
 
+    uin make_shader(GLenum type,const char* src) {
+        uin shader = glCreateShader(type);
+        glShaderSource(shader, 1, &src, NULL);
+        glCompileShader(shader);
+
+        return shader;
+    }
+
+    uin make_program(uin* shaders, int shader_count) {
+        uin program = glCreateProgram();
+
+        for (int i = 0; i < shader_count; i++) {
+            glAttachShader(program,shaders[i]);
+        }
+
+        glLinkProgram(program);
+        for (int i = 0; i < shader_count; i++) {
+            glDeleteShader(shaders[i]);
+        }
+    }
+
     // immutable storage can't be resized, so allocate a bigger one and copy over
     uin grow_buffer(uin old, GLsizeiptr usedBytes, GLsizeiptr newBytes)
     {
@@ -72,8 +93,20 @@ RenderMgr::~RenderMgr()
     }
 }
 
-MaterialHandle RenderMgr::create_material(uin program)
+ShaderHandle RenderMgr::create_shader(const ShaderDescriptor& descriptor) {
+
+    uin* _shaders = new uin[2]; // todo: allow multiple stages
+    _shaders[0] = make_shader(GL_VERTEX_SHADER,descriptor.vertexSource.c_str());
+    _shaders[1] = make_shader(GL_FRAGMENT_SHADER,descriptor.fragmentSource.c_str());
+
+    shaders.push_back(GpuShader(make_program(_shaders, 2)))
+}
+
+MaterialHandle RenderMgr::create_material(const ShaderHandle& handle)
 {
+    materials.push_back(GpuMaterial(shaders.at((u32)handle)));
+
+    return MaterialHandle(materials.size() - 1);
 }
 
 MeshHandle RenderMgr::create_mesh(const MeshDescriptor& descriptor)
@@ -148,12 +181,14 @@ void RenderMgr::flush()
     {
         const GpuMesh& mesh = meshes[dc.mesh];
 
-        const uin program = materials[dc.material];
+        const GpuMaterial& material = materials[dc.material];
+        program = shaders[material.shaderHandle].handle;
         if (program != curProgram)
         {
             glUseProgram(program);
             curProgram = program;
         }
+        material.apply();
 
         const uin vao = pools.at(mesh.fmt).vao;
         if (vao != curVao)
