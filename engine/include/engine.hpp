@@ -56,7 +56,8 @@ public:
     input::Input& input() ret(*_input);
     input::ActionMap& actions() ret(*_actions);
     Window& window() ret(*_window)
-    graphics::ModelCache& models() ret(*_models)
+    graphics::ModelCache& models() ret(*_models) 
+    ecs::World& world() ret(*_world)
 
     int start(GameCtrl& game);
     void quit() { _running = false; }
@@ -86,7 +87,7 @@ private:
     std::unique_ptr<graphics::RenderMgr> _renderMgr;
 
     std::unique_ptr<graphics::ModelCache> _models;
-    //std::unique_ptr<WorldMgr> _worldMgr;
+    std::unique_ptr<ecs::World> _world;
 
 
     int _frame_count = 0;

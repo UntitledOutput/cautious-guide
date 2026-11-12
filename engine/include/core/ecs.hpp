@@ -1,4 +1,6 @@
 #pragma once
+#include <cassert>
+
 #include "core/util.hpp"
 
 #include <memory>
@@ -7,7 +9,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace ecs
+namespace scene
 {
     struct Entity
     {
@@ -49,15 +51,29 @@ namespace ecs
     {
     public:
         template <typename... Args>
-        T& emplace(Entity e, Args&&... args);
-        // todo: grow sparse to e.index + 1 (filled with none), record dense.size() as the slot,
-        // push e and T{args...}, return data.back(). if it's already there, overwrite instead
+        T& emplace(Entity e, Args&&... args)
+        {
+            if (contains(e))
+                return data[sparse[e.index]] = T(std::forward<Args>(args)...);
 
-        bool contains(Entity e) const override;
-        // todo: index in range, slot != none, and dense[slot] == e (the generation check lives here)
+            sparse.resize(std::max(sparse.size(), size_t(e.index + 1)), none);
+            sparse[e.index] = u32(dense.size());
+            dense.push_back(e);
 
-        T& get(Entity e);
-        // todo: data[sparse[e.index]], assert contains(e) in debug
+            return data.emplace_back(std::forward<Args>(args)...);
+        }
+
+        bool contains(Entity e) const override
+        {
+            return e.index < sparse.size() && sparse[e.index] != none && dense[sparse[e.index]] == e;
+        }
+
+
+        T& get(Entity e) { 
+            assert(contains(e));
+            return data[sparse[e.index]];
+        }
+
 
         T* try_get(Entity e) { return contains(e) ? &get(e) : nullptr; }
 
@@ -89,6 +105,93 @@ namespace ecs
         std::vector<u32> sparse; // entity index -> slot in dense/data
         std::vector<Entity> dense;
         std::vector<T> data;
+    };
+
+        template <typename... Ts>
+    class View;
+
+    class World
+    {
+    public:
+        Entity create();
+
+        void destroy(Entity e);
+        bool alive(Entity e) const;
+
+        template <typename T, typename... Args>
+        T& add(Entity e, Args&&... args)
+        {
+            return pool<T>().emplace(e, std::forward<Args>(args)...);
+        }
+
+        template <typename T>
+        void remove(Entity e)
+        {
+            pool<T>().remove(e);
+        }
+
+        template <typename T>
+        bool contains(Entity e)
+        {
+            return pool<T>().contains(e);
+        }
+
+        template <typename T>
+        T& get(Entity e)
+        {
+            return pool<T>().get(e);
+        }
+
+        template <typename T>
+        T* try_get(Entity e)
+        {
+            return pool<T>().try_get(e);
+        }
+
+        template <typename... Ts>
+        View<Ts...> view()
+        {
+            return View<Ts...>(&pool<Ts>()...);
+        }
+
+    private:
+        template <typename T>
+        Pool<T>& pool()
+        {
+            const u32 id = type_id<std::remove_cvref_t<T>>();
+            if (id >= pools.size())
+                pools.resize(id + 1);
+            if (!pools[id])
+                pools[id] = std::make_unique<Pool<std::remove_cvref_t<T>>>();
+            return static_cast<Pool<std::remove_cvref_t<T>>&>(*pools[id]);
+        }
+
+        std::vector<u32> generations;
+        std::vector<u32> freeList;
+        std::vector<std::unique_ptr<IPool>> pools;
+    };
+    template <typename... Ts>
+    class View
+    {
+    public:
+        explicit View(Pool<Ts>*... p) : pools{p...} {}
+
+        template <typename Fn>
+        void each(Fn&& fn)
+        {
+            const IPool* smallest = nullptr;
+            ((smallest = (!smallest || std::get<Pool<Ts>*>(pools)->size() < smallest->size())
+                  ? std::get<Pool<Ts>*>(pools)
+                  : smallest),
+             ...);
+
+            for (Entity e : smallest->entities())
+                if ((std::get<Pool<Ts>*>(pools)->contains(e) && ...))
+                    fn(e, std::get<Pool<Ts>*>(pools)->get(e)...);
+        }
+
+    private:
+        std::tuple<Pool<Ts>*...> pools;
     };
 
 } // namespace ecs
