@@ -70,6 +70,7 @@ private:
 
     std::unique_ptr<filesys::FilesystemOperator> _filesystem;
     std::unique_ptr<Window> _window;
+    std::unique_ptr<input::Input> _input;
     std::unique_ptr<graphics::RenderMgr> _renderMgr;
     //std::unique_ptr<WorldMgr> _worldMgr;
 

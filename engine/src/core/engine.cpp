@@ -25,7 +25,7 @@ static void enable_gl_dbg()
 
 
 Engine::Engine(EngineConfiguration cfg) : _cfg(std::move(cfg)), _window(std::make_unique<Window>(_cfg.window)), _renderMgr(std::make_unique<graphics::RenderMgr>(_cfg.renderer)),
-    _filesystem(std::make_unique<filesys::FilesystemOperator>(std::move(_cfg.filesystem)))
+    _filesystem(std::make_unique<filesys::FilesystemOperator>(std::move(_cfg.filesystem))), _input(std::make_unique<input::Input>())
 {
 #ifndef NDEBUG
     enable_gl_dbg();
