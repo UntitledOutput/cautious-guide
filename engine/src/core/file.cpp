@@ -33,26 +33,16 @@ std::string filesys::FilesystemOperator::read_file_str(std::string path) {
     return content;
 }
 
-byte* filesys::FilesystemOperator::read_file_bytes(std::string path, int* out_size) { 
-    var fs_path = std::filesystem::path(path);
-    if (!std::filesystem::exists(fs_path))
-        throw_error("file does not exist: " + path);
-
-    std::ifstream file(fs_path, std::ios::in | std::ios::binary);
-    if (!file.is_open())
+std::vector<byte> filesys::FilesystemOperator::read_file(std::string path) { 
+    std::ifstream file(std::filesystem::path(path), std::ios::binary | std::ios::ate);
+    if (!file)
         throw_error("failed to open file: " + path);
 
-    file.seekg(0, std::ios::end);
-    std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
-
-    byte* buffer = new byte[size];
-    if (!file.read(reinterpret_cast<char*>(buffer), size))
+    std::vector<byte> data(size_t(file.tellg()));
+    file.seekg(0);
+    if (!data.empty() && !file.read(reinterpret_cast<char*>(data.data()), std::streamsize(data.size())))
         throw_error("failed to read file: " + path);
-
-    *out_size = static_cast<int>(size);
-
-    return buffer;
+    return data;
 }
 
 void* filesys::FilesystemOperator::read_file_auto(std::string path) {
@@ -61,9 +51,8 @@ void* filesys::FilesystemOperator::read_file_auto(std::string path) {
     if (_operator.operationType == FileType::String)
         return _operator.onFileString(read_file_str(path));
 
-    int size = 0;
-    var bytes = read_file_bytes(path, &size);
-    return _operator.onFileBytes(bytes, size);
+    var bytes = read_file(path);
+    return _operator.onFileBytes(bytes.data(), int(bytes.size()));
 }
 
 FileOperator& filesys::FilesystemOperator::get_file_operator(std::string ext)

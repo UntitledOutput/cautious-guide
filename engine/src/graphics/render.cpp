@@ -62,15 +62,45 @@ namespace
         return program;
     }
 
-    uin make_texture(int width, int height, GLenum format, byte* data)
+    uin make_texture(const graphics::TextureDescriptor& d)
     { 
-        uin texture = 0;
-        glGenTextures(1, &texture);
+        GLenum internal = GL_RGBA8;
+        switch (d.format)
+        {
+        case GL_RED: internal = GL_R8; break;
+        case GL_RG: internal = GL_RG8; break;
+        case GL_RGB: internal = d.sRGB ? GL_SRGB8 : GL_RGB8; break;
+        case GL_RGBA: internal = d.sRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8; break;
+        }
 
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        uin tex = 0;
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GLint(internal), d.width, d.height, 0, d.format, GL_UNSIGNED_BYTE, d.data.data());
         glGenerateMipmap(GL_TEXTURE_2D);
-        return texture;
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        return tex;
+    }
+
+    void apply_state(const graphics::RenderState& s, graphics::RenderState& cur, bool force)
+    {
+        if (force || s.blend != cur.blend)
+        {
+            if (s.blend)
+            {
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            }
+            else
+                glDisable(GL_BLEND);
+        }
+        if (force || s.cullBack != cur.cullBack)
+            s.cullBack ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
+        if (force || s.depthWrite != cur.depthWrite)
+            glDepthMask(s.depthWrite ? GL_TRUE : GL_FALSE);
+        cur = s;
     }
 
     // immutable storage can't be resized, so allocate a bigger one and copy over
@@ -217,6 +247,16 @@ RenderMgr::RenderMgr(const RenderConfiguration& cfg)
 
     cameraBuffer = make_buffer(sizeof(CameraData));
     glBindBufferBase(GL_UNIFORM_BUFFER, camera_binding, cameraBuffer);
+
+    auto solid = [&](byte r, byte g, byte b)
+    {
+        const byte px[4] = {r, g, b, 255};
+        return create_texture({1, 1, px, GL_RGBA});
+    };
+    whiteTexture = solid(255, 255, 255); // first, so handle 0 is white
+    blackTexture = solid(0, 0, 0);
+    normalTexture = solid(128, 128, 255);
+    glEnable(GL_FRAMEBUFFER_SRGB);
 }
 
 RenderMgr::~RenderMgr()
@@ -263,6 +303,10 @@ MaterialHandle RenderMgr::create_material(const ShaderHandle& handle)
     m.shader = handle;
     m.params.resize(layout.blockSize);
     m.textures.resize(layout.samplers.size(), 0);
+
+    for (const auto& [name, unit] : layout.samplers)
+        m.textures[unit] = default_texture(name);
+
     m.gpuOffset = index * materialStride;
     materials.push_back(std::move(m));
 
@@ -314,10 +358,9 @@ MeshHandle RenderMgr::create_mesh(const MeshDescriptor& descriptor)
     return MeshHandle(meshes.size() - 1);
 }
 
-TextureHandle RenderMgr::create_texture(TextureDescriptor descriptor)
+TextureHandle RenderMgr::create_texture(const TextureDescriptor& descriptor)
 {
-    textures.push_back(
-        GpuTexture(make_texture(descriptor.width, descriptor.height, descriptor.format, descriptor.data.data())));
+    textures.push_back(GpuTexture(make_texture(descriptor)));
     return TextureHandle(textures.size() - 1);
 }
 
@@ -357,7 +400,7 @@ void RenderMgr::screenshot(std::string filename)
 void RenderMgr::flush()
 {
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_CULL_FACE);
+    glDepthMask(GL_TRUE); // a transparent material from last frame can leave this off, and then the clear skips depth
     glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -366,6 +409,9 @@ void RenderMgr::flush()
     std::sort(drawCalls.begin(), drawCalls.end(),
               [this](const DrawCall& a, const DrawCall& b)
               {
+                  const bool ta = materials[a.material].state.blend, tb = materials[b.material].state.blend;
+                  if (ta != tb)
+                      return !ta;
                   if (a.material != b.material)
                       return a.material < b.material;
                   return meshes[a.mesh].fmt < meshes[b.mesh].fmt;
@@ -388,6 +434,8 @@ void RenderMgr::flush()
     uin curProgram = 0;
     uin curVao = 0;
     u32 curMaterial = UINT32_MAX;
+    RenderState curState{};
+    bool firstState = true;
 
     for (u32 i = 0; i < count; ++i)
     {
@@ -415,6 +463,9 @@ void RenderMgr::flush()
             }
 
             curMaterial = dc.material; // u32 curMaterial = UINT32_MAX; before the loop
+
+            apply_state(m.state, curState, firstState);
+            firstState = false;
         }
 
         const uin vao = pools.at(mesh.fmt).vao;
@@ -434,6 +485,15 @@ void RenderMgr::flush()
 
     glBindVertexArray(0);
     drawCalls.clear();
+}
+
+TextureHandle RenderMgr::default_texture(std::string_view sampler) const
+{
+    if (sampler.starts_with("_n"))
+        return normalTexture;
+    if (sampler.starts_with("_e"))
+        return blackTexture;
+    return whiteTexture;
 }
 
 RenderMgr::FormatPool& RenderMgr::get_pool(VertexFormat fmt)

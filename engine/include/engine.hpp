@@ -15,6 +15,11 @@
 
 #include "core/input.hpp"
 
+namespace graphics
+{
+    class ModelCache;
+}
+
 class Engine;
 
 class GameCtrl
@@ -42,7 +47,7 @@ class Engine
 {
 public:
     explicit Engine(EngineConfiguration cfg);
-    ~Engine() = default;
+    ~Engine();
     Engine(const Engine&) = delete;
     Engine& operator=(const Engine&) = delete;
 
@@ -51,6 +56,7 @@ public:
     input::Input& input() ret(*_input);
     input::ActionMap& actions() ret(*_actions);
     Window& window() ret(*_window)
+    graphics::ModelCache& models() ret(*_models)
 
     int start(GameCtrl& game);
     void quit() { _running = false; }
@@ -78,6 +84,8 @@ private:
     std::unique_ptr<input::Input> _input;
     std::unique_ptr<::input::ActionMap> _actions;
     std::unique_ptr<graphics::RenderMgr> _renderMgr;
+
+    std::unique_ptr<graphics::ModelCache> _models;
     //std::unique_ptr<WorldMgr> _worldMgr;
 
 

@@ -36,8 +36,9 @@ namespace graphics
     {
         int width;
         int height;
-        std::span<byte> data;
+        std::span<const byte> data;
         u32 format;
+        bool sRGB;
     };
 
     struct DrawCall
@@ -90,12 +91,18 @@ namespace graphics
         ShaderHandle create_shader(const ShaderDescriptor& descriptor);
         MaterialHandle create_material(const ShaderHandle& shader);
         MeshHandle create_mesh(const MeshDescriptor& descriptor);
-        TextureHandle create_texture(TextureDescriptor descriptor);
+        TextureHandle create_texture(const TextureDescriptor& descriptor);
         void submit_draw_call(const DrawCall& drawCall);
 
         void screenshot(std::string filename);
 
         void flush(); // render all draw calls and clear
+        
+        TextureHandle white_texture() ret(whiteTexture);
+        TextureHandle black_texture() ret(blackTexture);
+        TextureHandle normal_texture() ret(normalTexture);
+
+        TextureHandle default_texture(std::string_view sampler) const;
 
     private:
         struct FormatPool
@@ -126,6 +133,9 @@ namespace graphics
         std::vector<Material> materials;
         std::vector<GpuShader> shaders;
         std::vector<GpuTexture> textures;
+
+        TextureHandle whiteTexture = 0, blackTexture = 0, normalTexture = 0;
+
         std::unordered_map<VertexFormat, FormatPool> pools;
 
         CameraData camera_{};

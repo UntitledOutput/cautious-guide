@@ -1,6 +1,7 @@
 #pragma once
 #include "engine.hpp"
 #include "debug/debug.hpp"
+#include "graphics/model.hpp"
 
 struct SplatGame : GameCtrl
 {
@@ -15,6 +16,7 @@ private:
     graphics::MaterialHandle mat;
     graphics::ShaderHandle shader;
     graphics::TextureHandle tex;
+    graphics::ModelHandle model;
 
     FreeCam _freecam;
     bool f1Held;

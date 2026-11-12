@@ -3,6 +3,7 @@
 #include <iostream>
 
 #include "input.hpp"
+#include "graphics/model.hpp"
 
 void SplatGame::on_init(Engine& engine)
 {
@@ -52,6 +53,21 @@ void SplatGame::on_init(Engine& engine)
         throw_error("failed to load assets/textures/test.png");
     tex = *loaded;
 
+    engine.models().set_material_resolver(
+        [&](const graphics::MaterialData& md, std::span<const graphics::TextureHandle> textures)
+        {
+            var& r = engine.renderer();
+            var h = r.create_material(shader);
+            for (const auto& [name, value] : md.params)
+                std::visit([&](const auto& v) { r.set_material_param(h, name, v); }, value);
+            for (const auto& [sampler, index] : md.textures)
+                r.set_material_texture(h, sampler, textures[index]);
+            return h;
+        });
+
+    model = engine.models().load("assets/models/test.glb");
+
+
     engine.renderer().set_material_texture(mat, "uTexture", tex);
 
     _freecam = FreeCam{};
@@ -90,4 +106,5 @@ void SplatGame::on_render(Engine& engine, double alpha)
     drawCall.material = mat;
     drawCall.model = math::translate({0.0f, 0.0f, 0.0f});
     engine.renderer().submit_draw_call(drawCall);
+
 }

@@ -82,7 +82,7 @@ namespace filesys
         void register_file_operator(std::unique_ptr<FileOperator> operator_);
 
         std::string read_file_str(std::string path);
-        byte* read_file_bytes(std::string path, int* out_size);
+        std::vector<byte> read_file(std::string path);
         void* read_file_auto(std::string path);
         
     private:

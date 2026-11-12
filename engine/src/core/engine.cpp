@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <glad/glad.h>
 
+#include "graphics/model.hpp"
 #include "graphics/render.hpp"
 
 
@@ -31,7 +32,12 @@ Engine::Engine(EngineConfiguration cfg) : _cfg(std::move(cfg)), _window(std::mak
     enable_gl_dbg();
 #endif
     setup_file_operators();
+
+    _models = std::make_unique<graphics::ModelCache>(*_renderMgr, *_filesystem);
+    _models->add_loader(graphics::make_gltf_loader());
 }
+
+Engine::~Engine() = default;
 
 int Engine::start(GameCtrl& game)
 {
