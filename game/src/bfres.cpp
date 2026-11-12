@@ -115,10 +115,24 @@ void* BFRESFileOperator::onFileBytes(byte* data, int dataSize)
     if (!r.magic("FRES"))
         throw_error("not bfres");
 
-    r.bigEndian = r.peek<u16>(6) == 0xFFFE; // FE FF read as LE
+    uin fileVersion = r.read<uin>();
 
-    r.seek(0x20);
-    u32 model_dict_offset = r.read<u32>();
+    short bom = r.read<u16>(); // FE FF read as LE
+    r.bigEndian = bom == 0xFFFE;
 
+    short headerSize = r.read<short>();
+    uin fileSize = r.read<uin>();
+    uin fileAlign = r.read<uin>();
+    uin fileNameOffset = r.read<uin>(); // add 0x14 for abs
+
+    uin stringTblLen = r.read<uin>();
+    uin stringTblOffset = r.read<uin>(); // add 0x1C
+
+    uin* indexGroupOffsets = r.read_array<uin>(12);
+    u16* indexGroupCounts = r.read_array<u16>(12);
+
+    uin unk0 = r.read<uin>();
+
+    
 
 }

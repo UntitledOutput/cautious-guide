@@ -34,6 +34,16 @@ namespace filesys
         }
 
         template <typename T>
+        const T* read_array(size_t count)
+        {
+            if (remaining() < sizeof(T) * count)
+                throw_error("read past end of data");
+            const T* ptr = reinterpret_cast<const T*>(data.data() + pos);
+            pos += sizeof(T) * count;
+            return ptr;
+        }
+
+        template <typename T>
         T peek(size_t at) const
         {
             if (at > data.size() || data.size() - at < sizeof(T))
