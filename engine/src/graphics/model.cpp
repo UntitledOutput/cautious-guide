@@ -66,6 +66,20 @@ namespace
                 verts[i].uv0 = m.uvs[0][i];
         }
 
+        if (m.joints.size() == n)
+        {
+            fmt |= VertexFormat::Joints;
+            for (size_t i = 0; i < n; ++i)
+                std::copy(std::begin(m.joints[i]), std::end(m.joints[i]), std::begin(verts[i].joints));
+        }
+
+        if (m.weights.size() == n)
+        {
+            fmt |= VertexFormat::Weights;
+            for (size_t i = 0; i < n; ++i)
+                verts[i].weights = m.weights[i];
+        }
+
         return r.create_mesh({fmt, verts, m.indices});
     }
 } // namespace
@@ -80,6 +94,17 @@ ModelHandle ModelCache::load(const std::string& path)
         throw_error("set a material resolver before loading models");
 
     assets.push_back(upload(read(key)));
+    const ModelHandle h = ModelHandle(assets.size() - 1);
+    byPath.emplace(key, h);
+    return h;
+}
+
+ModelHandle ModelCache::generate(std::string key,const ModelData& data)
+{
+    if (!resolver)
+        throw_error("set a material resolver before loading models");
+
+    assets.push_back(upload(data));
     const ModelHandle h = ModelHandle(assets.size() - 1);
     byPath.emplace(key, h);
     return h;
@@ -143,9 +168,25 @@ ModelAsset ModelCache::upload(const ModelData& data)
         for (u32 mi : data.nodes[ni].meshes)
             asset.parts.push_back({meshes[mi], data.meshes[mi].material, ni,data.nodes[ni].skin});
 
+    for (const SkinData& s : data.skins)
+    {
+        if (s.inverseBind.size() != s.joints.size())
+            throw_error("skin has mismatched inverse bind count");
+        for (u32 j : s.joints)
+            if (j >= data.nodes.size())
+                throw_error("skin references a missing joint node");
+    }
+    for (const NodeData& n : data.nodes)
+        if (n.skin >= int(data.skins.size()))
+            throw_error("node references a missing skin");
+    for (const auto& a : data.animations)
+        for (const auto& c : a.channels)
+            if (c.node >= data.nodes.size())
+                throw_error("animation targets a missing node");
+
     asset.nodes = data.nodes;
     asset.animations = data.animations;
-    
+    asset.skins = data.skins;
     asset.restWorld.resize(asset.nodes.size());
     compute_node_world(asset.nodes, asset.restWorld);
     return asset;
@@ -178,12 +219,13 @@ void graphics::submit_model(RenderMgr& r, const ModelAsset& model, const math::m
         if (part.skin >= 0)
         {
             const SkinData& skin = model.skins[size_t(part.skin)];
-            jointScratch.resize(skin.joints.size());
-            for (size_t i = 0; i < skin.joints.size(); ++i)
-                jointScratch[i] = nodes[skin.joints[i]] * skin.inverseBind[i];
+            std::vector<math::mat4> joints(skin.joints.size());
+            for (size_t i = 0; i < joints.size(); ++i)
+                joints[i] = nodes[skin.joints[i]] * skin.inverseBind[i];
 
-            dc.model = world; // skinned meshes ignore their own node transform
-            // hand jointScratch to the draw call
+            dc.jointOffset = r.push_joints(joints);
+            dc.jointCount = u32(joints.size());
+            dc.model = world;
         }
         else
         {

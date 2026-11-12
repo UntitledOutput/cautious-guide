@@ -55,6 +55,14 @@ void* filesys::FilesystemOperator::read_file_auto(std::string path) {
     return _operator.onFileBytes(bytes.data(), int(bytes.size()));
 }
 
+void* FilesystemOperator::process_file(byte* data, int dataSize, std::string ext)
+{
+    auto& _operator = get_file_operator(ext);
+    if (_operator.operationType == FileType::String)
+        return _operator.onFileString(std::string((char*)data, size_t(dataSize)));
+    return _operator.onFileBytes(data, dataSize);
+}
+
 FileOperator& filesys::FilesystemOperator::get_file_operator(std::string ext)
 {
     for (auto& _operator : file_operators)

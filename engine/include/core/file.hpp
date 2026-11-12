@@ -84,6 +84,7 @@ namespace filesys
         std::string read_file_str(std::string path);
         std::vector<byte> read_file(std::string path);
         void* read_file_auto(std::string path);
+        void* process_file(byte* data, int dataSize, std::string ext);
         
     private:
         FilesystemConfiguration _cfg;

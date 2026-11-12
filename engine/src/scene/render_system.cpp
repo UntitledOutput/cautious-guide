@@ -1,5 +1,7 @@
 #include "scene/render_system.hpp"
 
+#include <algorithm>
+
 #include "core/components/transform.hpp"
 
 namespace
@@ -83,7 +85,14 @@ namespace scene
                 if (a.playing && clip.duration > 0.0f)
                 {
                     a.time += dt * a.speed;
-                    a.time = a.loop ? std::fmod(a.time, clip.duration) : std::min(a.time, clip.duration);
+                    if (a.loop)
+                    {
+                        a.time = std::fmod(a.time, clip.duration);
+                        if (a.time < 0.0f)
+                            a.time += clip.duration;
+                    }
+                    else
+                        a.time = std::clamp(a.time, 0.0f, clip.duration);
                 }
 
                 // reset to rest pose so untargeted nodes stay put

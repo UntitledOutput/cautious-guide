@@ -41,6 +41,6 @@ struct Vertex
     math::vec3 position;
     math::vec3 normal;
     math::vec2 uv0;
-
-    // todo: bone stuffs
+    u16 joints[4];
+    math::vec4 weights;
 };

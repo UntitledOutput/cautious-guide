@@ -22,6 +22,7 @@ namespace
         VertexFormat flag;
         GLint components;
         GLuint offset;
+        bool is_int = false;
     };
 
     // index in this table = attribute location, so shaders can use layout(location = N)
@@ -29,6 +30,18 @@ namespace
         {VertexFormat::Position, 3, offsetof(Vertex, position)},
         {VertexFormat::Normal, 3, offsetof(Vertex, normal)},
         {VertexFormat::UV0, 2, offsetof(Vertex, uv0)},
+        {VertexFormat::Joints,4, offsetof(Vertex, joints), true},
+        {VertexFormat::Weights,4, offsetof(Vertex, weights)}
+    };
+
+    constexpr GLuint joint_binding = 3;
+
+    struct ObjectData
+    {
+        math::mat4 model;
+        u32 jointOffset;
+        u32 jointCount;
+        u32 pad[2];
     };
 
     uin make_buffer(GLsizeiptr bytes)
@@ -271,6 +284,13 @@ RenderMgr::~RenderMgr()
     }
 }
 
+u32 RenderMgr::push_joints(std::span<const math::mat4> joints)
+{
+    const u32 offset = u32(jointStaging.size());
+    jointStaging.insert(jointStaging.end(), joints.begin(), joints.end());
+    return offset;
+}
+
 ShaderHandle RenderMgr::create_shader(const ShaderDescriptor& descriptor) {
 
     uin* _shaders = new uin[2]; // todo: allow multiple stages
@@ -429,8 +449,25 @@ void RenderMgr::flush()
 
     objectStaging.resize(size_t(count) * materialStride);
     for (u32 i = 0; i < count; ++i)
-        std::memcpy(objectStaging.data() + size_t(i) * materialStride, &drawCalls[i].model, sizeof(math::mat4));
+    {
+        const ObjectData od{drawCalls[i].model, drawCalls[i].jointOffset, drawCalls[i].jointCount, {}};
+        std::memcpy(objectStaging.data() + size_t(i) * materialStride, &od, sizeof(od));
+    }
     upload(objectBuffer, 0, GLsizeiptr(objectStaging.size()), objectStaging.data());
+
+    if (!jointStaging.empty())
+    {
+        const u32 needed = u32(jointStaging.size());
+        if (needed > jointCap)
+        {
+            if (jointBuffer)
+                glDeleteBuffers(1, &jointBuffer);
+            jointCap = grow_cap(std::max(jointCap, 1024u), needed);
+            jointBuffer = make_buffer(GLsizeiptr(jointCap) * sizeof(math::mat4));
+        }
+        upload(jointBuffer, 0, GLsizeiptr(needed) * sizeof(math::mat4), jointStaging.data());
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, joint_binding, jointBuffer);
+    }
 
     uin curProgram = 0;
     uin curVao = 0;
@@ -477,7 +514,7 @@ void RenderMgr::flush()
         }
 
         glBindBufferRange(GL_UNIFORM_BUFFER, object_binding, objectBuffer, GLintptr(i) * materialStride,
-                      sizeof(math::mat4));
+                          sizeof(ObjectData));
 
         glDrawElementsInstancedBaseVertexBaseInstance(
             GL_TRIANGLES, GLsizei(mesh.idx), GL_UNSIGNED_INT,
@@ -486,6 +523,7 @@ void RenderMgr::flush()
 
     glBindVertexArray(0);
     drawCalls.clear();
+    jointStaging.clear();
 }
 
 TextureHandle RenderMgr::default_texture(std::string_view sampler) const
@@ -523,7 +561,10 @@ RenderMgr::FormatPool& RenderMgr::get_pool(VertexFormat fmt)
             continue;
 
         glEnableVertexAttribArray(loc);
-        glVertexAttribFormat(loc, a.components, GL_FLOAT, GL_FALSE, a.offset);
+        if (a.is_int)
+            glVertexAttribIFormat(loc, a.components, GL_UNSIGNED_SHORT, a.offset);
+        else
+            glVertexAttribFormat(loc, a.components, GL_FLOAT, GL_FALSE, a.offset);
         glVertexAttribBinding(loc, 0);
     }
 

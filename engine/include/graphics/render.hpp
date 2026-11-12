@@ -46,6 +46,8 @@ namespace graphics
         u32 mesh;
         u32 material;
         math::mat4 model;
+        u32 jointOffset = 0;
+        u32 jointCount = 0;
         // todo: instancing and draw order
     };
 
@@ -88,6 +90,8 @@ namespace graphics
         
         void set_camera(const CameraData& cam) { camera_ = cam; }
 
+        u32 push_joints(std::span<const math::mat4> joints);
+
         ShaderHandle create_shader(const ShaderDescriptor& descriptor);
         MaterialHandle create_material(const ShaderHandle& shader);
         MeshHandle create_mesh(const MeshDescriptor& descriptor);
@@ -127,6 +131,10 @@ namespace graphics
         uin materialBuffer = 0;
         u32 materialStride = 256;
         u32 materialCap = 0;
+
+        uin jointBuffer = 0;
+        u32 jointCap = 0;
+        std::vector<math::mat4> jointStaging;
 
         std::vector<DrawCall> drawCalls;
         std::vector<GpuMesh> meshes;
