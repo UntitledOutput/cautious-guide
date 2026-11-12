@@ -1,5 +1,6 @@
 #pragma once
 #include "engine.hpp"
+#include "core/commands.hpp"
 #include "debug/debug.hpp"
 #include "graphics/model.hpp"
 
@@ -12,6 +13,8 @@ struct SplatGame : GameCtrl
     void on_fixed_update(Engine&, double delta) override;
 
 private:
+    ecs::CommandBuffer commandBuffer;
+
     graphics::MeshHandle mesh;
     graphics::MaterialHandle mat;
     graphics::ShaderHandle shader;

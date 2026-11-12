@@ -80,6 +80,7 @@ namespace
         ModelData out;
         u32 defaultMaterial = 0;
         std::unordered_map<int, std::vector<u32>> meshParts;
+        std::vector<int> nodeRemap; // gltf node index -> out.nodes index
 
         const byte* accessor_data(const tinygltf::Accessor& acc, size_t& stride, size_t elemSize)
         {
@@ -330,11 +331,99 @@ namespace
             if (gn.mesh >= 0)
                 n.meshes = mesh_parts(gn.mesh);
 
+            n.skin = gn.skin;
+
             const int index = int(out.nodes.size());
+            nodeRemap[size_t(gltfIndex)] = index;
             out.nodes.push_back(std::move(n));
 
             for (int child : gn.children)
                 visit(child, index, depth + 1);
+        }
+
+
+
+        void read_animations()
+        {
+            for (const auto& anim : gm.animations)
+            {
+                AnimationData a;
+                a.name = anim.name;
+                for (const auto& ch : anim.channels)
+                {
+                    if (ch.sampler < 0 || size_t(ch.sampler) >= anim.samplers.size())
+                        continue;
+                    if (ch.target_node < 0 || size_t(ch.target_node) >= nodeRemap.size() ||
+                        nodeRemap[size_t(ch.target_node)] < 0)
+                        continue; // not in the loaded scene
+
+                    AnimationData::Channel c;
+                    if (ch.target_path == "translation")
+                        c.path = AnimPath::Translation;
+                    else if (ch.target_path == "rotation")
+                        c.path = AnimPath::Rotation;
+                    else if (ch.target_path == "scale")
+                        c.path = AnimPath::Scale;
+                    else
+                        continue; // morph weights, later
+
+                    const auto& s = anim.samplers[size_t(ch.sampler)];
+                    if (s.input < 0 || s.output < 0 || size_t(s.input) >= gm.accessors.size() ||
+                        size_t(s.output) >= gm.accessors.size())
+                        continue;
+
+                    c.interp = s.interpolation == "STEP"   ? AnimInterp::Step
+                        : s.interpolation == "CUBICSPLINE" ? AnimInterp::CubicSpline
+                                                           : AnimInterp::Linear;
+                    c.node = u32(nodeRemap[size_t(ch.target_node)]);
+
+                    for (const auto& t : read_floats<1>(s.input))
+                        c.times.push_back(t[0]);
+                    for (const auto& v : read_floats<4>(s.output))
+                        c.values.push_back({v[0], v[1], v[2], v[3]});
+
+                    const size_t expected = c.times.size() * (c.interp == AnimInterp::CubicSpline ? 3 : 1);
+                    if (c.times.empty() || c.values.size() != expected)
+                        continue;
+
+                    a.duration = std::max(a.duration, c.times.back());
+                    a.channels.push_back(std::move(c));
+                }
+                out.animations.push_back(std::move(a));
+            }
+        }
+
+        void read_skins()
+        {
+            for (const auto& gs : gm.skins)
+            {
+                SkinData s;
+                for (int j : gs.joints)
+                {
+                    if (j < 0 || size_t(j) >= nodeRemap.size() || nodeRemap[size_t(j)] < 0)
+                        throw_error("gltf: skin joint isn't in the loaded scene");
+                    s.joints.push_back(u32(nodeRemap[size_t(j)]));
+                }
+
+                s.inverseBind.assign(s.joints.size(), math::mat4::identity());
+
+                if (gs.inverseBindMatrices >= 0 && size_t(gs.inverseBindMatrices) < gm.accessors.size())
+                {
+                    const auto& acc = gm.accessors[size_t(gs.inverseBindMatrices)];
+                    if (acc.type != TINYGLTF_TYPE_MAT4 || acc.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT)
+                        throw_error("gltf: inverseBindMatrices must be float mat4");
+
+                    const auto mats = read_floats<16>(gs.inverseBindMatrices);
+                    if (mats.size() < s.joints.size())
+                        throw_error("gltf: fewer inverse bind matrices than joints");
+
+                    for (size_t i = 0; i < s.joints.size(); ++i)
+                        for (int col = 0; col < 4; ++col)
+                            for (int row = 0; row < 4; ++row)
+                                s.inverseBind[i][col][row] = mats[i][size_t(col * 4 + row)];
+                }
+                out.skins.push_back(std::move(s));
+            }
         }
 
         ModelData run()
@@ -345,10 +434,12 @@ namespace
             read_textures();
             read_materials();
 
+            nodeRemap.assign(gm.nodes.size(), -1);
             const auto& scene = gm.scenes[gm.defaultScene >= 0 ? size_t(gm.defaultScene) : 0];
             for (int root : scene.nodes)
                 visit(root, -1, 0);
-
+            read_animations();
+            read_skins();
             return std::move(out);
         }
     };

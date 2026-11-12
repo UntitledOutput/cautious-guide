@@ -3,19 +3,23 @@
 #include <math/quaternion.hpp>
 #include <math/matrix.hpp>
 
-struct Transform
+namespace scene
 {
-    math::vec3 position{};
-    math::quat rotation = math::quat::identity();
-    math::vec3 scale{1.0f, 1.0f, 1.0f};
-
-    math::mat4 matrix() const
+    struct Transform
     {
-        return math::translate(position) * math::to_mat4(rotation) * math::scale(scale);
-    }
-};
+        math::vec3 position{};
+        math::quat rotation = math::quat::identity();
+        math::vec3 scale{1.0f, 1.0f, 1.0f};
 
-struct WorldTransform {
-    math::mat4 matrix = math::mat4::identity();
-};
+        math::mat4 matrix() const
+        {
+            return math::translate(position) * math::to_mat4(rotation) * math::scale(scale);
+        }
+    };
 
+    struct WorldTransform
+    {
+        math::mat4 matrix = math::mat4::identity();
+    };
+
+}

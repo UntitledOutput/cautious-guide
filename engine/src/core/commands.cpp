@@ -1,14 +1,12 @@
 #include "core/commands.hpp"
 
 #include "core/ecs.hpp"
-
+#include "core/hierarchy.hpp"
 
 
 void ecs::CommandBuffer::apply(ecs::World& world)
 {
-    for (auto e : toDestroy)
-    {
-        world.destroy(e);
-    }
+    for (ecs::Entity e : toDestroy)
+        scene::destroy_recursive(world, e);
     toDestroy.clear();
 }

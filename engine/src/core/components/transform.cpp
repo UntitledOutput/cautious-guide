@@ -1,3 +1,1 @@
-#include "transform.hpp"
-
-using namespace ecs;
+#include "core/components/transform.hpp"

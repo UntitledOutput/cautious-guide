@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace scene
+namespace ecs
 {
     struct Entity
     {

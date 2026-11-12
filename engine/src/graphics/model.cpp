@@ -141,9 +141,11 @@ ModelAsset ModelCache::upload(const ModelData& data)
 
     for (u32 ni = 0; ni < data.nodes.size(); ++ni)
         for (u32 mi : data.nodes[ni].meshes)
-            asset.parts.push_back({meshes[mi], data.meshes[mi].material, ni});
+            asset.parts.push_back({meshes[mi], data.meshes[mi].material, ni,data.nodes[ni].skin});
 
     asset.nodes = data.nodes;
+    asset.animations = data.animations;
+    
     asset.restWorld.resize(asset.nodes.size());
     compute_node_world(asset.nodes, asset.restWorld);
     return asset;
@@ -173,7 +175,21 @@ void graphics::submit_model(RenderMgr& r, const ModelAsset& model, const math::m
         DrawCall dc{};
         dc.mesh = part.mesh;
         dc.material = mat;
-        dc.model = world * nodes[part.node];
+        if (part.skin >= 0)
+        {
+            const SkinData& skin = model.skins[size_t(part.skin)];
+            jointScratch.resize(skin.joints.size());
+            for (size_t i = 0; i < skin.joints.size(); ++i)
+                jointScratch[i] = nodes[skin.joints[i]] * skin.inverseBind[i];
+
+            dc.model = world; // skinned meshes ignore their own node transform
+            // hand jointScratch to the draw call
+        }
+        else
+        {
+            dc.model = world * nodes[part.node];
+        }
+
         r.submit_draw_call(dc);
     }
 }

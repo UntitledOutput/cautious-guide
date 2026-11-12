@@ -80,6 +80,41 @@ namespace graphics
         math::quat rotation = math::quat::identity();
         math::vec3 scale{1.0f, 1.0f, 1.0f};
         std::vector<u32> meshes; // ModelData::meshes indices
+        int skin = -1;
+    };
+
+    enum class AnimPath : u8
+    {
+        Translation,
+        Rotation,
+        Scale
+    };
+    enum class AnimInterp : u8
+    {
+        Step,
+        Linear,
+        CubicSpline
+    };
+
+    struct AnimationData
+    {
+        struct Channel
+        {
+            u32 node = 0;
+            AnimPath path = AnimPath::Translation;
+            AnimInterp interp = AnimInterp::Linear;
+            std::vector<float> times;
+            std::vector<math::vec4> values; // cubic: in-tangent, value, out-tangent per key
+        };
+        std::string name;
+        float duration = 0.0f;
+        std::vector<Channel> channels;
+    };
+
+    struct SkinData
+    {
+        std::vector<u32> joints;
+        std::vector<math::mat4> inverseBind;
     };
 
     struct ModelData
@@ -88,6 +123,8 @@ namespace graphics
         std::vector<MaterialData> materials;
         std::vector<TextureData> textures;
         std::vector<NodeData> nodes; // parent-first
+        std::vector<AnimationData> animations;
+        std::vector<SkinData> skins;
     };
 
     struct LoadContext
@@ -95,6 +132,8 @@ namespace graphics
         std::string baseDir;
         std::function<std::vector<byte>(const std::string& path)> read;
     };
+
+
 
     class ModelLoader
     {
@@ -113,12 +152,15 @@ namespace graphics
             MeshHandle mesh;
             u32 materialSlot;
             u32 node;
+            int skin = -1;
         };
 
         std::vector<Part> parts;
         std::vector<MaterialHandle> materials; // default per slot
         std::vector<NodeData> nodes; // rest pose
         std::vector<math::mat4> restWorld;
+        std::vector<AnimationData> animations;
+        std::vector<SkinData> skins;
     };
 
     using MaterialResolver = std::function<MaterialHandle(const MaterialData&, std::span<const TextureHandle>)>;

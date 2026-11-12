@@ -13,7 +13,8 @@ enum class VertexFormat : uint8_t
     UV0 = 1 << 2,
     UV1 = 1 << 3,
     UV2 = 1 << 4,
-    Last = UV2
+    Joints = 1 << 5,
+    Weights = 1 << 6,
 };
 
 inline VertexFormat operator|(VertexFormat lhs, VertexFormat rhs)

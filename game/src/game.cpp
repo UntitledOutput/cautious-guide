@@ -4,6 +4,8 @@
 
 #include "input.hpp"
 #include "graphics/model.hpp"
+#include "scene/render_system.hpp"
+#include "scene/transform_system.hpp"
 
 void SplatGame::on_init(Engine& engine)
 {
@@ -65,8 +67,10 @@ void SplatGame::on_init(Engine& engine)
             return h;
         });
 
-    model = engine.models().load("assets/models/test.glb");
-
+    model = engine.models().load("assets/models/RiggedSimple.glb");
+    var e = scene::spawn_model(engine.world(), model);
+    engine.world().add<Animator>(e);
+    engine.world().add<Pose>(e);
 
     engine.renderer().set_material_texture(mat, "uTexture", tex);
 
@@ -92,6 +96,8 @@ void SplatGame::on_update(Engine& engine, double dt)
 void SplatGame::on_fixed_update(Engine& engine, double)
 {
     var& actions = engine.actions();
+
+    commandBuffer.apply(engine.world());
 }
 
 void SplatGame::on_render(Engine& engine, double alpha)
@@ -101,10 +107,9 @@ void SplatGame::on_render(Engine& engine, double alpha)
 
     engine.renderer().set_camera(_freecam.camera_data(aspect));
 
-    var drawCall = graphics::DrawCall{};
-    drawCall.mesh = mesh;
-    drawCall.material = mat;
-    drawCall.model = math::translate({0.0f, 0.0f, 0.0f});
-    engine.renderer().submit_draw_call(drawCall);
+        scene::run_animators(engine.world(), engine.models(), float(alpha));
+    scene::update_world_transforms(engine.world(), engine.models());
+
+    scene::render_models(engine.world(), engine.models(), engine.renderer());
 
 }

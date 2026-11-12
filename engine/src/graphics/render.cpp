@@ -223,7 +223,7 @@ namespace
 using namespace graphics;
 
 GpuShader::~GpuShader() { glDeleteProgram(handle); }
-GpuShader::GpuShader(GpuShader&& o) noexcept : handle(std::exchange(o.handle,0)) { }
+GpuShader::GpuShader(GpuShader&& o) noexcept : layout(std::move(o.layout)), handle(std::exchange(o.handle, 0)) {}
 
 GpuShader& GpuShader::operator=(GpuShader&& o) noexcept
 {
@@ -231,6 +231,7 @@ GpuShader& GpuShader::operator=(GpuShader&& o) noexcept
     {
         glDeleteProgram(handle);
         handle = std::exchange(o.handle, 0);
+        layout = std::move(o.layout);
     }
     return *this;
 }

@@ -5,7 +5,7 @@
 #include "util.hpp"
 
 
-namespace ecs
+namespace scene
 {
     void detatch(ecs::World& entity, ecs::Entity child);
     void attach(ecs::World& entity, ecs::Entity child, ecs::Entity parent, u32 node = UINT32_MAX);
