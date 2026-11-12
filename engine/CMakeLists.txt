@@ -1,6 +1,7 @@
 find_package(SDL2 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(Stb REQUIRED)
+find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
 
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
@@ -18,6 +19,7 @@ target_include_directories(engine
     ${SDL2_INCLUDE_DIRS}
     ${OPENGL_INCLUDE_DIR}
     ${STB_INCLUDE_DIRS}
+    ${TINYGLTF_INCLUDE_DIRS}
     include # path to glad.h and khrplatform.h
 )
 
@@ -25,6 +27,7 @@ target_link_libraries(engine PRIVATE OpenGL::GL)
 
 # render.hpp includes glad, so anything including engine headers needs it too
 target_link_libraries(engine PUBLIC glad)
+
 
 target_link_libraries(engine PUBLIC
     $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>

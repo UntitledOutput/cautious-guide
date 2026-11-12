@@ -25,7 +25,7 @@ static void enable_gl_dbg()
 
 
 Engine::Engine(EngineConfiguration cfg) : _cfg(std::move(cfg)), _window(std::make_unique<Window>(_cfg.window)), _renderMgr(std::make_unique<graphics::RenderMgr>(_cfg.renderer)),
-    _filesystem(std::make_unique<filesys::FilesystemOperator>(std::move(_cfg.filesystem))), _input(std::make_unique<input::Input>())
+    _filesystem(std::make_unique<filesys::FilesystemOperator>(std::move(_cfg.filesystem))), _input(std::make_unique<input::Input>()), _actions(std::make_unique<input::ActionMap>())
 {
 #ifndef NDEBUG
     enable_gl_dbg();
@@ -49,8 +49,9 @@ int Engine::start(GameCtrl& game)
 
         previousCtr = nowCtr;
         acc += std::min(frame, 0.25);
-
-        _window->poll_events();
+        _input->begin_frame();
+        _window->poll_events(*_input);
+        _actions->update(*_input);
         if (_window->should_close())
             _running = false;
         if (_window->was_resized())
@@ -58,6 +59,7 @@ int Engine::start(GameCtrl& game)
         while (acc >= tick_step)
         {
             game.on_fixed_update(*this,tick_step);
+            _actions->consume_tick();
             acc -= tick_step;
         }
 
@@ -79,7 +81,7 @@ Engine::SDLContext::SDLContext()
 #if _WIN32
     SDL_SetHint(SDL_HINT_WINDOWS_DPI_AWARENESS, "permonitorv2");
 #endif
-    if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0)
+    if (SDL_Init(SDL_INIT_EVENTS | SDL_INIT_TIMER | SDL_INIT_GAMECONTROLLER) != 0)
         throw_error(SDL_GetError());
 }
 

@@ -2,8 +2,13 @@
 
 #include <iostream>
 
+#include "input.hpp"
+
 void SplatGame::on_init(Engine& engine)
 {
+    SplatActions actions;
+    actions.register_with(engine.actions());
+
     var descriptor = graphics::MeshDescriptor{};
     descriptor.format = VertexFormat::Position | VertexFormat::Normal | VertexFormat::UV0;
 
@@ -49,19 +54,36 @@ void SplatGame::on_init(Engine& engine)
 
     engine.renderer().set_material_texture(mat, "uTexture", tex);
 
+    _freecam = FreeCam{};
+
+    _freecam.position = {0, 0, 5};
+
     std::cout << "SplatGame initialized" << std::endl;
+}
+
+
+
+void SplatGame::on_update(Engine& engine, double dt)
+{
+    if (engine.input().key_down(SDL_SCANCODE_F1) && !f1Held)
+        _freecam.enabled = !_freecam.enabled;
+    f1Held = engine.input().key_down(SDL_SCANCODE_F1);
+
+    if (_freecam.enabled)
+        _freecam.update(engine, float(dt));
+}
+
+void SplatGame::on_fixed_update(Engine& engine, double)
+{
+    var& actions = engine.actions();
 }
 
 void SplatGame::on_render(Engine& engine, double alpha)
 {
-    var eye = math::vec3{2.0f, 1.5f, 3.0f};
+    var& win = engine.window();
+    float aspect = win.framebuffer_height() > 0 ? float(win.framebuffer_width()) / float(win.framebuffer_height()): 1.0f; // minimized
 
-    var cam = graphics::CameraData{};
-    cam.view = math::look_at(eye, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
-    cam.projection = math::perspective(1.047f, 16.0f / 9.0f, 0.1f, 500.0f); // 60 degrees
-    cam.viewProjection = cam.projection * cam.view;
-    cam.position = {eye.x, eye.y, eye.z, 1.0f};
-    engine.renderer().set_camera(cam);
+    engine.renderer().set_camera(_freecam.camera_data(aspect));
 
     var drawCall = graphics::DrawCall{};
     drawCall.mesh = mesh;

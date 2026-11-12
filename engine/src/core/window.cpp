@@ -2,6 +2,8 @@
 #include <glad/glad.h>
 #include <SDL.h>
 
+#include "core/input.hpp"
+
 Window::Window(const WindowDescription& desc)
 {
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0)
@@ -52,12 +54,14 @@ Window::Window(const WindowDescription& desc)
 Window::~Window()
 { destroy(); }
 
-void Window::poll_events()
+void Window::poll_events(input::Input& in)
 {
     _resized = false;
     SDL_Event e;
     while (SDL_PollEvent(&e))
     {
+        in.handle_event(e);
+
         switch (e.type)
         {
             case SDL_QUIT:

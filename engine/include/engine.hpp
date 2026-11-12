@@ -13,6 +13,8 @@
 #include "graphics/render.hpp"
 #include <core/file.hpp>
 
+#include "core/input.hpp"
+
 class Engine;
 
 class GameCtrl
@@ -46,6 +48,9 @@ public:
 
     graphics::RenderMgr& renderer() ret(*_renderMgr);
     filesys::FilesystemOperator& filesystem() ret(*_filesystem);
+    input::Input& input() ret(*_input);
+    input::ActionMap& actions() ret(*_actions);
+    Window& window() ret(*_window)
 
     int start(GameCtrl& game);
     void quit() { _running = false; }
@@ -71,6 +76,7 @@ private:
     std::unique_ptr<filesys::FilesystemOperator> _filesystem;
     std::unique_ptr<Window> _window;
     std::unique_ptr<input::Input> _input;
+    std::unique_ptr<::input::ActionMap> _actions;
     std::unique_ptr<graphics::RenderMgr> _renderMgr;
     //std::unique_ptr<WorldMgr> _worldMgr;
 

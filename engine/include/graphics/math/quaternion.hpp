@@ -51,5 +51,6 @@ quat nlerp(quat a, quat b, float t);
 mat4 to_mat4(quat q);
 quat from_mat4(const mat4& m);
 quat from_euler(vec3 radians);
+vec3 to_euler(quat q);
 
 } // namespace math

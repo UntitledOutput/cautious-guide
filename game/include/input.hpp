@@ -1,34 +1,38 @@
 #include "core/input.hpp"
+#include <SDL.h>
 
-enum class Action : u8 { Shoot, Jump, Swim, Sub, Special, Map, Count };
+using namespace input;
 
-struct Binding
+struct SplatActions
 {
-    enum class Source : u8 { Key, Mouse, PadButton, PadTrigger } source;
-    u16 code;
-};
+    ActionId shoot, jump, swim, sub, special, map, move;
 
-class ActionMap
-{
-public:
-    void bind(Action a, Binding b);
-    void update(const input::Input& in);       // once per frame, after events
+    void register_with(ActionMap& m)
+    {
+        shoot = m.add("shoot", ActionKind::Button);
+        jump = m.add("jump", ActionKind::Button);
+        swim = m.add("swim", ActionKind::Button);
+        sub = m.add("sub", ActionKind::Button);
+        special = m.add("special", ActionKind::Button);
+        map = m.add("map", ActionKind::Button);
+        move = m.add("move", ActionKind::Axis2D);
+    }
 
-    bool down(Action a) const;
-    bool pressed(Action a) const;       // latched until the next tick consumes it
-    void consume_tick();                // call after each fixed update
+    void default_bindings(ActionMap& m)
+    {
+        using S = Binding::Source;
+        m.bind(move, {S::Key, SDL_SCANCODE_D, 1.0f, 0});
+        m.bind(move, {S::Key, SDL_SCANCODE_A, -1.0f, 0});
+        m.bind(move, {S::Key, SDL_SCANCODE_W, 1.0f, 1});
+        m.bind(move, {S::Key, SDL_SCANCODE_S, -1.0f, 1});
+        m.bind(move, {S::PadAxis, SDL_CONTROLLER_AXIS_LEFTX, 1.0f, 0});
+        m.bind(move, {S::PadAxis, SDL_CONTROLLER_AXIS_LEFTY, -1.0f, 1});
 
-    math::vec2 move(const input::Input& in) const; // WASD or left stick, normalized
-
-private:
-    std::array<std::vector<Binding>, size_t(Action::Count)> bindings;
-    std::array<bool, size_t(Action::Count)> state{}, latched{};
-};
-
-struct PlayerCommand
-{
-    u32 tick;
-    math::vec2 move;    // -1..1
-    float yaw, pitch;   // absolute aim, not deltas
-    u8 buttons;         // bitmask of Action
+        m.bind(shoot, {S::MouseButton, SDL_BUTTON_LEFT});
+        m.bind(shoot, {S::PadAxis, SDL_CONTROLLER_AXIS_TRIGGERRIGHT});
+        m.bind(swim, {S::Key, SDL_SCANCODE_LSHIFT});
+        m.bind(swim, {S::PadAxis, SDL_CONTROLLER_AXIS_TRIGGERLEFT});
+        m.bind(jump, {S::Key, SDL_SCANCODE_SPACE});
+        m.bind(jump, {S::PadButton, SDL_CONTROLLER_BUTTON_B});
+    }
 };

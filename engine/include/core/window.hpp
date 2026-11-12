@@ -3,6 +3,11 @@
 
 #include "util.hpp"
 
+namespace input
+{
+    class Input;
+}
+
 struct SDL_Window;
 def_void SDL_GLContext;
 
@@ -26,7 +31,7 @@ public:
     Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
 
-    void poll_events();
+    void poll_events(input::Input& in);
     void swap();
 
     bool should_close() ret(_should_close)
