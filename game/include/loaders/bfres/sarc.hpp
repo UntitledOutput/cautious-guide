@@ -9,12 +9,7 @@
 
 #include "reader.hpp"
 
-struct SarcFile
-{
-    std::string name;
-    std::span<const byte> data;
-    void* processedData;
-};
+
 
 struct BfresFile
 {
@@ -87,7 +82,11 @@ struct BfresFile
             /// <summary>
             /// 3 32-bit floating point values.
             /// </summary>
-            Three_32Bit_Float = 0x00000811
+            Three_32Bit_Float = 0x00000811,
+
+            Four_8Bit_Normalized = 0x0000000A,
+            Two_8Bit_UInt = 0x00000104,
+            Four_8Bit_UInt = 0x0000010A,
         };
 
         struct FvtxVertexAttribute
@@ -99,12 +98,16 @@ struct BfresFile
 
         struct FvtxVertexData
         {
-            const byte* data = nullptr;
+            std::span<const byte> data;
             u16 stride;
             std::vector<FvtxVertexAttribute> attributes;
+
+            std::vector<math::vec2> getVector2Data(FvtxVertexAttribute attribute);
+            std::vector<math::vec3> getVector3Data(FvtxVertexAttribute attribute);
         };
 
-
+        u32 vertexCount = 0;
+        u8 skinCount = 0;
         std::vector<FvtxVertexData> data;
     };
 
@@ -237,7 +240,7 @@ struct BfresFile
         };
 
         struct FSHPIndexBuffer {
-            std::vector<u16> data;
+            std::vector<u32> data;
         };
 
         struct FSHPLodModel {
@@ -248,9 +251,7 @@ struct BfresFile
         };
 
         struct FSHPVisibilityNode {
-            FSHPVisibilityNode* leftNode;
             u16 leftNodeIndex;
-            FSHPVisibilityNode* rightNode;
             u16 rightNodeIndex;
             u16 visibilityGroupIndex;
             std::vector<FSHPVisibilityGroup> visibilityGroups;
@@ -263,6 +264,7 @@ struct BfresFile
         u16 materialIndex;
         u16 boneIndex;
         u16 vertexBufferIndex;
+        u8 vertexSkinCount = 0;
 
         std::vector<FSHPLodModel> lodModels;
         std::vector<FSHPVisibilityNode> visibilityNodes;
@@ -280,4 +282,33 @@ struct BfresFile
     };
 
     std::vector<FMDL> models;
+
+    std::vector<byte> storage;
 };
+
+struct SarcFile
+{
+    std::string name;
+    std::span<const byte> data;
+    std::unique_ptr<BfresFile> bfres;
+};
+
+struct SarcArchive
+{
+    std::vector<byte> storage;
+    std::vector<SarcFile> files;
+
+    SarcArchive() = default;
+    SarcArchive(const SarcArchive&) = delete;
+    SarcArchive& operator=(const SarcArchive&) = delete;
+
+    const SarcFile* find(std::string_view name) const
+    {
+        for (const auto& f : files)
+            if (f.name == name)
+                return &f;
+        return nullptr;
+    }
+};
+
+std::unique_ptr<BfresFile> load_bfres(std::span<const byte> data);

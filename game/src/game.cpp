@@ -14,7 +14,6 @@ void SplatGame::on_init(Engine& engine)
     SplatActions actions;
     actions.register_with(engine.actions());
     engine.filesystem().register_file_operator( SARCFileOperator::initialize(engine) );
-    engine.filesystem().register_file_operator(BFRESFileOperator::initialize(engine));
 
     var shader_descriptor = graphics::ShaderDescriptor{};
     shader_descriptor.vertexSource = engine.filesystem().read_file_str("assets/shaders/basic.vert");
@@ -34,7 +33,8 @@ void SplatGame::on_init(Engine& engine)
             return h;
         });
 
-    var sarc = (SarcFile*)engine.filesystem().read_file_auto("assets/Npc_Judge.szs");
+    judge.reset(static_cast<SarcArchive*>(engine.filesystem().read_file_auto("assets/Npc_Judge.szs")));
+    const BfresFile& bfres = *judge->find("Output.bfres")->bfres;
 
     model = engine.models().load("assets/models/RiggedSimple.glb");
     var e = scene::spawn_model(engine.world(), model);

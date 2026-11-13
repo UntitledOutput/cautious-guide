@@ -4,6 +4,66 @@
 
 using bfrs = BfresFile;
 
+math::vec4 decode_attribute(filesys::ByteReader& r, BfresFile::FvtxVertexBuffer::FvtxVertexAttributeFormat format)
+{
+    switch (u32(format))
+    {
+        case 0x811:
+            return {r.read<float>(), r.read<float>(), r.read<float>(), 1.0f};
+        case 0x80D:
+            return {r.read<float>(), r.read<float>(), 0.0f, 1.0f};
+        case 0x007:
+            return {r.read<u16>() / 65535.0f, r.read<u16>() / 65535.0f, 0.0f, 1.0f};
+        case 0x004:
+            return {r.read<u8>() / 255.0f, r.read<u8>() / 255.0f, 0.0f, 0.0f};
+        case 0x00A:
+            return {r.read<u8>() / 255.0f, r.read<u8>() / 255.0f, r.read<u8>() / 255.0f, r.read<u8>() / 255.0f};
+        case 0x104:
+            return {float(r.read<u8>()), float(r.read<u8>()), 0.0f, 0.0f};
+        case 0x10A:
+            return {float(r.read<u8>()), float(r.read<u8>()), float(r.read<u8>()), float(r.read<u8>())};
+        case 0x20A:
+            {
+                auto s = [&] { return std::max(float(r.read<int8_t>()) / 127.0f, -1.0f); };
+                return {s(), s(), s(), s()};
+            }
+        case 0x20B:
+            {
+                const u32 v = r.read<u32>();
+                auto s = [&](int shift)
+                {
+                    int x = int((v >> shift) & 0x3FF);
+                    if (x & 0x200)
+                        x -= 0x400;
+                    return float(x) / 511.0f;
+                };
+                return {s(0), s(10), s(20), 0.0f};
+            }
+        default:
+            throw_error("unsupported vertex attribute format " + std::to_string(u32(format)));
+    }
+}
+
+std::vector<math::vec4> read_attribute(const BfresFile::FvtxVertexBuffer& vb, std::string_view name)
+{
+    for (const auto& buf : vb.data)
+        for (const auto& a : buf.attributes)
+        {
+            if (a.name != name)
+                continue;
+
+            filesys::ByteReader r(buf.data, true);
+            std::vector<math::vec4> out(vb.vertexCount);
+            for (u32 i = 0; i < vb.vertexCount; ++i)
+            {
+                r.seek(size_t(i) * buf.stride + a.offset);
+                out[i] = decode_attribute(r, a.format);
+            }
+            return out;
+        }
+    return {};
+}
+
 std::vector<SarcFile> sarc_read(std::span<const byte> src)
 {
     filesys::ByteReader r(src);
@@ -96,28 +156,20 @@ std::vector<byte> yaz0_decompress(std::span<const byte> src)
 
 void* SARCFileOperator::onFileBytes(byte* data, int dataSize)
 {
-    filesys::ByteReader r({data,size_t(dataSize)}, true);
-    if (r.magic("Yaz0"))
-    {
-        auto decompressed = yaz0_decompress({data, size_t(dataSize)});
-        return onFileBytes(decompressed.data(), decompressed.size());
-    }
+    const std::span<const byte> src{data, size_t(dataSize)};
+    auto archive = std::make_unique<SarcArchive>();
 
-    std::vector<SarcFile> files = sarc_read({data, size_t(dataSize)});
+    if (src.size() >= 4 && std::memcmp(src.data(), "Yaz0", 4) == 0)
+        archive->storage = yaz0_decompress(src);
+    else
+        archive->storage.assign(src.begin(), src.end());
 
-    for (auto file : files)
-    {
+    archive->files = sarc_read(archive->storage);
+    for (auto& file : archive->files)
+        if (std::filesystem::path(file.name).extension() == ".bfres")
+            file.bfres = load_bfres(file.data);
 
-        file.processedData = (*(Engine*)enginePtr)
-                                 .filesystem()
-                                 .process_file(const_cast<byte*>(file.data.data()), file.data.size(),
-                                               std::filesystem::path(file.name).extension().string());
-    }
-
-    SarcFile* filesBytes = new SarcFile[files.size()];
-    std::copy(files.begin(), files.end(), filesBytes);
-
-    return filesBytes;
+    return archive.release();
 }
 
 BfresFile::Dictionary load_dictionary(filesys::ByteReader& r)
@@ -179,9 +231,8 @@ BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
         bone.smoothMatrixIndex = r.read<u16>();
         bone.rigidMatrixIndex = r.read<u16>();
         bone.billboardIndex = r.read<u16>();
-        r.read<u16>(); // unk
-        u16 flags = r.read<u16>(); // flags
-        r.read<u16>(); // unk
+        r.read<u16>(); // user data count
+        const u32 flags = r.read<u32>();
 
         bone.scale = r.read_vec3();
         const math::vec4 rot = r.read_vec4();
@@ -208,19 +259,76 @@ BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
 
     for (int i = 0; i < inverseIndexCount; ++i)
     {
+        if (inverseIndexArray[i] >= fskl.bones.size())
+            throw_error("fskl: inverse index out of range");
         fskl.bones[inverseIndexArray[i]].inverseMatrix = inverseMatrices[i];
-    }
-
-    for (auto& fskl_bone : fskl.bones)
-    {
-        if (fskl_bone.parentIndex == 0xFFFF)
-            continue;
-        fskl_bone.parent = &fskl.bones[fskl_bone.parentIndex];
     }
 
 
     return fskl;
 }
+
+std::vector<math::vec2> BfresFile::FvtxVertexBuffer::FvtxVertexData::getVector2Data(FvtxVertexAttribute attribute)
+{
+    var _data = std::vector<math::vec2>();
+
+    var reader = filesys::ByteReader(data, true);
+    for (int i = 0; i < data.size(); i += stride)
+    {
+        reader.seek(i + attribute.offset);
+        switch (attribute.format)
+        {
+            case FvtxVertexAttributeFormat::Two_32Bit_Float:
+                _data.push_back(reader.read_vec2());
+                break;
+            case FvtxVertexAttributeFormat::Two_16Bit_Normalized:
+                {
+                    u16 x = reader.read<u16>();
+                    u16 y = reader.read<u16>();
+                    _data.push_back(math::vec2(cflt x / 65535.f, cflt y / 65535.f));
+                }
+                break;
+            default:
+                throw_error("mismatching format");
+        }
+    }
+
+    return _data;
+}
+
+std::vector<math::vec3> BfresFile::FvtxVertexBuffer::FvtxVertexData::getVector3Data(FvtxVertexAttribute attribute)
+{
+    
+    var _data = std::vector<math::vec3>();
+
+    var reader = filesys::ByteReader(data, true);
+    for (int i = 0; i < data.size(); i += stride)
+    {
+        reader.seek(i + attribute.offset);
+        switch (attribute.format)
+        {
+            case FvtxVertexAttributeFormat::Three_32Bit_Float:
+                _data.push_back(reader.read_vec3());
+                break;
+            case FvtxVertexAttributeFormat::Three_10Bit_Signed:
+                {
+                    uint packedBytes = reader.read<u32>();
+                    short x = (short)((packedBytes >> 20) & 0x3FF);
+                    short y = (short)((packedBytes >> 10) & 0x3FF);
+                    short z = (short)(packedBytes & 0x3FF);
+                    // Divide by 511 to get the float value.
+                    _data.push_back(math::vec3(x / 511.f, y / 511.f, z / 511.f));
+                }
+                break;
+            default:
+                throw_error("mismatching format");
+        }
+    }
+
+    return _data;
+
+}
+
 
 BfresFile::FvtxVertexBuffer load_vertex_buffer(filesys::ByteReader& r)
 {
@@ -231,15 +339,8 @@ BfresFile::FvtxVertexBuffer load_vertex_buffer(filesys::ByteReader& r)
     var attributeCount = r.read<byte>();
     var bufferCount = r.read<byte>();
     var index = r.read<u16>();
-    var elementCount = r.read<u32>();
-
-    var unk = r.read<u32>();
-
-    if (unk != 0x00000000 && unk != 0x01000000 &&
-        unk != 0x02000000 && unk != 0x03000000 && unk != 0x04000000)
-    {
-        throw_error("unk unexpected value ");
-    }
+    buffer.vertexCount = r.read<u32>();
+    buffer.skinCount = u8(r.read<u32>() >> 24);
 
     var attributeArrayOffset = r.read_rel_offset();
     var attributeIndexGroupOffset = r.read_rel_offset();
@@ -253,25 +354,21 @@ BfresFile::FvtxVertexBuffer load_vertex_buffer(filesys::ByteReader& r)
     r.seek(bufferArrayOffset);
     for (int i = 0; i < bufferCount; ++i)
     {
+        r.seek(bufferArrayOffset + size_t(i) * 0x18);
+
         BfresFile::FvtxVertexBuffer::FvtxVertexData dataBuffer{};
-
-        unk = r.read<u32>();
-        var size = r.read<u32>();
-        unk = r.read<u32>();
+        r.read<u32>(); // runtime data pointer
+        const u32 size = r.read<u32>();
+        r.read<u32>(); // runtime handle
         dataBuffer.stride = r.read<u16>();
-        r.read<u16>();
-        r.read<u32>();
-        var dataOffset = r.read_rel_offset();
+        r.read<u16>(); // buffering count
+        r.read<u32>(); // runtime context pointer
+        const size_t dataOffset = r.read_rel_offset();
 
-        if (size > 0)
-        {
-            var pos = r.position();
-            r.seek(dataOffset);
-            dataBuffer.data = r.read_array<byte>(size);
-            r.seek(pos);
-        }
+        if (size > 0 && dataOffset != 0)
+            dataBuffer.data = r.slice(dataOffset, size);
 
-        buffer.data.push_back(dataBuffer);
+        buffer.data.push_back(std::move(dataBuffer));
     }
 
     r.seek(attributeArrayOffset);
@@ -470,8 +567,6 @@ BfresFile::FMAT load_material(filesys::ByteReader& r)
         mat.shaderControl.vertexShaderName = r.read_string_offset();
         mat.shaderControl.fragmentShaderName = r.read_string_offset();
 
-        r.read<u32>();
-
         r.read<u32>(); // revision
         r.read<byte>(); // attrib assign count
         r.read<byte>(); // sampler assign count
@@ -534,16 +629,18 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
     
     shape.name = r.read_string_offset();
 
+    r.read<u32>();
+
     shape.index = r.read<u16>();
     shape.materialIndex = r.read<u16>();
     shape.boneIndex = r.read<u16>();
     shape.vertexBufferIndex = r.read<u16>();
 
     u16 skeletonIndexArrayCount = r.read<u16>();
-    r.read<byte>();
+    shape.vertexSkinCount = r.read<byte>();
     var lodModelCount = r.read<byte>();
     var visibilityNodeCount = r.read<u32>();
-    r.read<u32>();
+    r.read<float>();
 
     var vertexBufferOffset = r.read_rel_offset();
     var lodModelOffset = r.read_rel_offset();
@@ -630,11 +727,6 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
     {
         var node = shape.visibilityNodes[i];
 
-        if (node.leftNodeIndex != i)
-            node.leftNode = &shape.visibilityNodes[node.leftNodeIndex];
-        if (node.rightNodeIndex != i)
-            node.rightNode = &shape.visibilityNodes[node.rightNodeIndex];
-
         for (int j = 0; j < node.visibilityGroups.size(); j++)
         {
             node.visibilityGroups[j] = shape.lodModels[0].visibilityGroups[j + node.visibilityGroupIndex];
@@ -718,12 +810,12 @@ BfresFile::FMDL load_model(filesys::ByteReader& r)
     return fmdl;
 } 
 
-void* BFRESFileOperator::onFileBytes(byte* data, int dataSize)
+std::unique_ptr<BfresFile> load_bfres(std::span<const byte> data)
 {
-    filesys::ByteReader r({data, size_t(dataSize)});
+    filesys::ByteReader r(data);
     if (!r.magic("FRES"))
         throw_error("not bfres");
-    
+
     byte version0 = r.read<byte>();
     byte version1 = r.read<byte>();
     byte version2 = r.read<byte>();
@@ -760,21 +852,14 @@ void* BFRESFileOperator::onFileBytes(byte* data, int dataSize)
         dictionaries[i] = dictionary;
     }
 
-    // https://github.com/OatmealDome/NintenTools/blob/master/src/Syroot.NintenTools/Bfres/BfresFile.cs#L266
-    var bfres = new BfresFile{};
-    bfres->models = std::vector<BfresFile::FMDL>(dictionaries[0].nodes.size());
-    for (int i = 0; i < dictionaries[0].nodes.size(); ++i)
+    auto bfres = std::make_unique<BfresFile>();
+    bfres->models.resize(dictionaries[0].nodes.size());
+    for (size_t i = 0; i < dictionaries[0].nodes.size(); ++i)
     {
-        var node = dictionaries[0].nodes[i];
-        r.seek(node.dataOffset);
-
-        var fmdl = load_model(r);
-
-        bfres->models[i] = fmdl;
+        r.seek(dictionaries[0].nodes[i].dataOffset);
+        bfres->models[i] = load_model(r);
     }
-    // todo: texture section
-    // todo: skeletal animation section
 
-    
+
     return bfres;
 }

@@ -3,6 +3,7 @@
 #include "core/commands.hpp"
 #include "debug/debug.hpp"
 #include "graphics/model.hpp"
+#include "loaders/bfres/sarc.hpp"
 
 struct SplatGame : GameCtrl
 {
@@ -20,6 +21,7 @@ private:
     graphics::ShaderHandle shader;
     graphics::TextureHandle tex;
     graphics::ModelHandle model;
+    std::unique_ptr<SarcArchive> judge;
 
     FreeCam _freecam;
     bool f1Held;
