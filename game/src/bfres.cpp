@@ -211,6 +211,8 @@ BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
 
     for (auto& fskl_bone : fskl.bones)
     {
+        if (fskl_bone.parentIndex == 0xFFFF)
+            continue;
         fskl_bone.parent = &fskl.bones[fskl_bone.parentIndex];
     }
 
@@ -467,8 +469,6 @@ BfresFile::FMAT load_material(filesys::ByteReader& r)
         mat.shaderControl.fragmentShaderName = r.read_string_offset();
 
         r.read<u32>();
-        mat.shaderControl.vertexShaderInputs = r.read_string_list(r.read<u16>());
-        mat.shaderControl.fragmentShaderInputs = r.read_string_list(r.read<u16>());
 
         r.read<u32>(); // revision
         r.read<byte>(); // attrib assign count
@@ -527,6 +527,9 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
     if (!r.magic("FSHP"))
         throw_error("not fshp");
 
+    // https://github.com/OatmealDome/NintenTools/blob/master/src/Syroot.NintenTools/Bfres/Fmdl/FshpModel.cs#L20
+    // https://github.com/OatmealDome/NintenTools/blob/master/src/Syroot.NintenTools/Bfres/Fmdl/FmdlSection.cs#L92
+    
     return shape;
 }
 
@@ -635,6 +638,7 @@ void* BFRESFileOperator::onFileBytes(byte* data, int dataSize)
         dictionaries[i] = dictionary;
     }
 
+    // https://github.com/OatmealDome/NintenTools/blob/master/src/Syroot.NintenTools/Bfres/BfresFile.cs#L266
     var bfres = new BfresFile{};
     bfres->models = std::vector<BfresFile::FMDL>(dictionaries[0].nodes.size());
     for (int i = 0; i < dictionaries[0].nodes.size(); ++i)
@@ -646,6 +650,8 @@ void* BFRESFileOperator::onFileBytes(byte* data, int dataSize)
 
         bfres->models[i] = fmdl;
     }
+    // todo: texture section
+    // todo: skeletal animation section
 
     
     return bfres;
