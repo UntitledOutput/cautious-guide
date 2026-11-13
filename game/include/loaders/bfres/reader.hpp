@@ -98,6 +98,14 @@ namespace filesys
             return offset == 0 ? std::string{} : string_at(offset);
         }
 
+        std::vector<std::string> read_string_list(size_t count)
+        {
+            std::vector<std::string> out(count);
+            for (size_t i = 0; i < count; ++i)
+                out[i] = read_string_offset();
+            return out;
+        } 
+
         math::vec2 read_vec2()
         {
             return { read<float>(), read<float>() };
@@ -118,10 +126,9 @@ namespace filesys
         math::mat4 read_mat3()
         {
             math::mat4 m = math::mat4::identity();
-            for (int i = 0; i < 3; ++i)
-            {
-                m[i] = read_vec4();
-            }
+            for (int row = 0; row < 3; ++row)
+                for (int col = 0; col < 4; ++col)
+                    m[col][row] = read<float>();
             return m;
         }
 

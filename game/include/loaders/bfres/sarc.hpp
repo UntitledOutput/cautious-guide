@@ -40,8 +40,11 @@ struct BfresFile
             math::mat4 inverseMatrix;
 
             u16 index;
-            std::vector<u16> parentIndices;
-            std::vector<FsklBone> parents;
+            u16 parentIndex;
+            u16 smoothMatrixIndex;
+            u16 rigidMatrixIndex;
+            u16 billboardIndex;
+            FsklBone* parent;
         };
 
         std::vector<FsklBone> bones;
@@ -165,10 +168,10 @@ struct BfresFile
         {
             std::string name;
             FmatRenderParameterType type;
-            
-            const byte* nullBytesValue;
-            math::vec2 vector2Value;
-            std::string stringValue;
+
+            std::vector<int32_t> ints;
+            std::vector<float> floats;
+            std::vector<std::string> strings;
         };
 
         struct FMATTextureSelector

@@ -142,6 +142,8 @@ BfresFile::Dictionary load_dictionary(filesys::ByteReader& r)
     return dictionary;
 }
 
+
+
 BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
 {
     if (!r.magic("FSKL"))
@@ -171,13 +173,18 @@ BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
         bone.name = r.read_string_offset();
 
         bone.index = r.read<u16>();
-        bone.parentIndices = r.read_list<u16>(4);
+        bone.parentIndex = r.read<u16>();
+        bone.smoothMatrixIndex = r.read<u16>();
+        bone.rigidMatrixIndex = r.read<u16>();
+        bone.billboardIndex = r.read<u16>();
         r.read<u16>(); // unk
-        r.read<u16>(); // flags
+        u16 flags = r.read<u16>(); // flags
         r.read<u16>(); // unk
 
         bone.scale = r.read_vec3();
-        bone.rotation = r.read_quat();
+        const math::vec4 rot = r.read_vec4();
+        bone.rotation = (flags & 0x7000) == 0x1000 ? math::from_euler({rot.x, rot.y, rot.z})
+                                                   : math::quat{rot.x, rot.y, rot.z, rot.w};
         bone.position = r.read_vec3();
 
         r.read<uint>(); // unk
@@ -204,13 +211,7 @@ BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
 
     for (auto& fskl_bone : fskl.bones)
     {
-        fskl_bone.parents = std::vector<BfresFile::FSKL::FsklBone>(fskl_bone.parentIndices.size());
-        for (int i = 0; i < fskl_bone.parentIndices.size(); ++i)
-        {
-            u16 parentIndex = fskl_bone.parentIndices[i];
-            if (parentIndex != 0xFFFF)
-                fskl_bone.parents[i] = fskl.bones[parentIndex];
-        }
+        fskl_bone.parent = &fskl.bones[fskl_bone.parentIndex];
     }
 
 
@@ -281,7 +282,7 @@ BfresFile::FvtxVertexBuffer load_vertex_buffer(filesys::ByteReader& r)
 
         a.format = (BfresFile::FvtxVertexBuffer::FvtxVertexAttributeFormat)r.read<uint>();
 
-        var bufferIndex = (byte)(indexAndOffset & 0xFF000000);
+        var bufferIndex = byte(indexAndOffset >> 24);
         buffer.data[bufferIndex].attributes.push_back(a);
     }
 
@@ -316,6 +317,7 @@ BfresFile::FMAT load_material(filesys::ByteReader& r)
     var shaderControlOffset = r.read_rel_offset();
     var textureSelectorOffset = r.read_rel_offset();
     var textureAttributeSelectorOffset = r.read_rel_offset();
+    var textureAttributeSelectorIndexGroupOffset = r.read_rel_offset();
     var materialParameterOffset = r.read_rel_offset();
     var materialParameterIndexGroupOffset = r.read_rel_offset();
     var materialParameterDataOffset = r.read_rel_offset();
@@ -332,28 +334,25 @@ BfresFile::FMAT load_material(filesys::ByteReader& r)
         r.seek(renderParameterIndexGroup.nodes[i].dataOffset);
         var param = BfresFile::FMAT::FMATRenderParameter{};
 
-        r.read<u16>();
-
+        const u16 count = r.read<u16>();
         param.type = (BfresFile::FMAT::FmatRenderParameterType)r.read<byte>();
-
         r.read<byte>();
-
         param.name = r.read_string_offset();
-
-        switch (param.type)
+        switch (u8(param.type))
         {
-            case BfresFile::FMAT::FmatRenderParameterType::Null8Bytes:
-                param.nullBytesValue = r.read_array<byte>(8);
+            case 0:
+                param.ints = r.read_list<int32_t>(count);
                 break;
-            case BfresFile::FMAT::FmatRenderParameterType::Vector2F:
-                param.vector2Value = r.read_vec2();
+            case 1:
+                param.floats = r.read_list<float>(count);
                 break;
-            case BfresFile::FMAT::FmatRenderParameterType::StringOffset:
-                param.stringValue = r.read_string_offset();
+            case 2:
+                param.strings = r.read_string_list(count);
                 break;
             default:
-                throw_error("unknown render parameter type");
+                throw_error("unknown render info type");
         }
+
         mat.renderParams[i] = param;
     }
 
@@ -384,16 +383,139 @@ BfresFile::FMAT load_material(filesys::ByteReader& r)
         r.read<sbyte>();
         r.read<byte>();
         r.read<u16>();
+        r.read<u32>();
+        r.read<u32>();
 
 
         attributeSelector.name = r.read_string_offset();
         attributeSelector.index = r.read<byte>();
+
+        r.read<byte>();
+        r.read<u16>(); 
+        mat.textureAttributeSelectors[i] = attributeSelector;
     }
 
     // material parameters
+
     r.seek(materialParameterOffset);
-    mat.materialParameters =
-        std::vector<BfresFile::FMAT::FMATTextureAttributeSelector>(materialParameterCount);
+    {
+        mat.materialParameters = std::vector<BfresFile::FMAT::FMATMaterialParameter>(materialParameterCount);
+        for (int i = 0; i < materialParameterCount; ++i)
+        {
+            var parameter = BfresFile::FMAT::FMATMaterialParameter{};
+
+            parameter.type = (BfresFile::FMAT::FmatMaterialParameterType)r.read<byte>();
+
+            var size = r.read<byte>();
+            var offset = r.read<u16>();
+
+            r.read<u32>();
+            r.read<u32>();
+
+            var index = r.read<u16>();
+            var repeatedIndex = r.read<u16>();
+
+            parameter.name = r.read_string_offset();
+
+            var pos = r.position();
+            r.seek(materialParameterDataOffset + offset);
+            switch (parameter.type)
+            {
+
+                case BfresFile::FMAT::FmatMaterialParameterType::Int32:
+                    parameter.intValue = r.read<int>();
+                    break;
+                case BfresFile::FMAT::FmatMaterialParameterType::Single:
+                    parameter.singleValue = r.read<float>();
+                    break;
+                case BfresFile::FMAT::FmatMaterialParameterType::Vector2F:
+                    parameter.vector2Value = r.read_vec2();
+                    break;
+                case BfresFile::FMAT::FmatMaterialParameterType::Vector3F:
+                    parameter.vector3Value = r.read_vec3();
+                    break;
+                case BfresFile::FMAT::FmatMaterialParameterType::Vector4F:
+                    parameter.vector4Value = r.read_vec4();
+                    break;
+                case BfresFile::FMAT::FmatMaterialParameterType::Matrix2x3:
+                    {
+                        float m11 = r.read<float>();
+                        float m21 = r.read<float>();
+                        float m12 = r.read<float>();
+                        float m22 = r.read<float>();
+                        float m13 = r.read<float>();
+                        float m23 = r.read<float>();
+                        parameter.matrixValue = math::mat4();
+                        parameter.matrixValue[1] = {m11, m12, m13, 0};
+                        parameter.matrixValue[2] = {m21, m22, m23, 0};
+                    }
+                    break;
+                default:
+                    break;
+            }
+            r.seek(pos);
+            mat.materialParameters[i] = parameter;
+        }
+    }
+
+    // shader control
+    r.seek(shaderControlOffset);
+    {
+        mat.shaderControl = {};
+
+        mat.shaderControl.vertexShaderName = r.read_string_offset();
+        mat.shaderControl.fragmentShaderName = r.read_string_offset();
+
+        r.read<u32>();
+        mat.shaderControl.vertexShaderInputs = r.read_string_list(r.read<u16>());
+        mat.shaderControl.fragmentShaderInputs = r.read_string_list(r.read<u16>());
+
+        r.read<u32>(); // revision
+        r.read<byte>(); // attrib assign count
+        r.read<byte>(); // sampler assign count
+        r.read<u16>(); // option count
+        var vertexShaderInputIndexGroupOffset = r.read_rel_offset();
+        var fragmentShaderInputIndexGroupOffset = r.read_rel_offset();
+        var parameterIndexGroupOffset = r.read_rel_offset();
+
+        r.seek(vertexShaderInputIndexGroupOffset);
+        var vtxShaderInputGroup = load_dictionary(r);
+
+        for (auto& node : vtxShaderInputGroup.nodes)
+            mat.shaderControl.vertexShaderInputs.push_back(node.name);
+
+        r.seek(fragmentShaderInputIndexGroupOffset);
+        var frgShaderInputGroup = load_dictionary(r);
+
+        for (auto& node : frgShaderInputGroup.nodes)
+            mat.shaderControl.fragmentShaderInputs.push_back(node.name);
+
+        r.seek(parameterIndexGroupOffset);
+        var parameterInputGroup = load_dictionary(r);
+
+        for (auto& node : parameterInputGroup.nodes)
+            mat.shaderControl.parameters.push_back(node.name);
+    }
+
+    // shadow parameters
+    r.seek(shadowParameterIndexGroupOffset);
+    var shadowInputGroup = load_dictionary(r);
+
+    for (auto node : shadowInputGroup.nodes)
+    {
+        r.seek(node.dataOffset);
+
+        var param = BfresFile::FMAT::FMATShadowParameter{};
+        param.name = r.read_string_offset();
+
+        r.read<u16>();
+        r.read<byte>();
+        r.read<byte>();
+
+        param.value = r.read<u32>();
+
+        mat.shadowParameters.push_back(param);
+    }
 
     return mat;
 }
