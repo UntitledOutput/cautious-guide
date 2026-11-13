@@ -2,6 +2,8 @@
 #include "loaders/bfres/reader.hpp"
 #include "loaders/bfres/bfres.hpp"
 
+using bfrs = BfresFile;
+
 std::vector<SarcFile> sarc_read(std::span<const byte> src)
 {
     filesys::ByteReader r(src);
@@ -530,6 +532,43 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
     // https://github.com/OatmealDome/NintenTools/blob/master/src/Syroot.NintenTools/Bfres/Fmdl/FshpModel.cs#L20
     // https://github.com/OatmealDome/NintenTools/blob/master/src/Syroot.NintenTools/Bfres/Fmdl/FmdlSection.cs#L92
     
+    shape.name = r.read_string_offset();
+
+    shape.index = r.read<u16>();
+    shape.materialIndex = r.read<u16>();
+    shape.boneIndex = r.read<u16>();
+    shape.vertexBufferIndex = r.read<u16>();
+
+    u16 skeletonIndexArrayCount = r.read<u16>();
+    r.read<byte>();
+    var lodModelCount = r.read<byte>();
+    var visiblityNodeCount = r.read<u32>();
+    r.read<u32>();
+
+    var vertexBufferOffset = r.read_rel_offset();
+    var lodModelOffset = r.read_rel_offset();
+    var skeletonIndexArrayOffset = r.read_rel_offset();
+
+    r.read<u32>();
+
+    var visiblityNodesOffset = r.read_rel_offset();
+    var visibilityRangesOffset = r.read_rel_offset();
+    var visibilityIndicesOffset = r.read_rel_offset();
+
+    r.read<u32>();
+
+    r.seek(lodModelOffset);
+    for (int i = 0; i < lodModelCount; i++)
+    {
+        var lodModel = bfrs::FSHP::FSHPLodModel{};
+
+        r.read<u32>();
+        r.read<u32>();
+
+        lodModel.totalPointCount = r.read<u32>();
+    }
+    
+
     return shape;
 }
 

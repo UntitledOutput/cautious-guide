@@ -230,7 +230,40 @@ struct BfresFile
 
     struct FSHP
     {
+
+        struct FSHPVisibilityGroup {
+            uint offset;
+            uint count;
+        };
+
+        struct FSHPIndexBuffer {
+            std::vector<u16> data;
+        };
+
+        struct FSHPLodModel {
+            std::vector<FSHPVisibilityGroup> visibilityGroups;
+            uint totalPointCount;
+            uint skipElements;
+        };
+
+        struct FSHPVisiblityNode {
+            FSHPVisiblityNode* leftNode;
+            FSHPVisiblityNode* rightNode;
+            std::vector<FSHPVisibilityGroup> visibilityGroups;
+        };
         
+
+        std::string name;
+
+        u16 index;
+        u16 materialIndex;
+        u16 boneIndex;
+        u16 vertexBufferIndex;
+
+        std::vector<FSHPLodModel> lodModels;
+        std::vector<FSHPVisiblityNode> visibilityNodes;
+        std::vector<u16> visibilityIndices;
+        std::vector<u16> skeletonOffsets;
     };
 
     struct FMDL
