@@ -90,6 +90,7 @@ namespace filesys
         FilesystemConfiguration _cfg;
 
         FileOperator& get_file_operator(std::string ext);
+        bool has_file_operator(std::string ext);
 
         std::vector<std::unique_ptr<FileOperator>> file_operators;
 

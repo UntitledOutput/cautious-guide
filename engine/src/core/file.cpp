@@ -57,6 +57,9 @@ void* filesys::FilesystemOperator::read_file_auto(std::string path) {
 
 void* FilesystemOperator::process_file(byte* data, int dataSize, std::string ext)
 {
+    if (!has_file_operator(ext))
+        return nullptr;
+
     auto& _operator = get_file_operator(ext);
     if (_operator.operationType == FileType::String)
         return _operator.onFileString(std::string((char*)data, size_t(dataSize)));
@@ -71,4 +74,14 @@ FileOperator& filesys::FilesystemOperator::get_file_operator(std::string ext)
             return *_operator;
     }
     throw_error("no file operator found for extension: " + ext);
+}
+
+bool FilesystemOperator::has_file_operator(std::string ext)
+{
+    for (auto& _operator : file_operators)
+    {
+        if (vcontains(_operator->extensions, ext))
+            return true;
+    }
+    return false;
 }

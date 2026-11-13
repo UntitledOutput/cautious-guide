@@ -103,6 +103,15 @@ void* SARCFileOperator::onFileBytes(byte* data, int dataSize)
 
     std::vector<SarcFile> files = sarc_read({data, size_t(dataSize)});
 
+    for (auto file : files)
+    {
+
+        file.processedData = (*(Engine*)enginePtr)
+                                 .filesystem()
+                                 .process_file(const_cast<byte*>(file.data.data()), file.data.size(),
+                                               std::filesystem::path(file.name).extension().string());
+    }
+
     SarcFile* filesBytes = new SarcFile[files.size()];
     std::copy(files.begin(), files.end(), filesBytes);
 
@@ -111,14 +120,16 @@ void* SARCFileOperator::onFileBytes(byte* data, int dataSize)
 
 void* BFRESFileOperator::onFileBytes(byte* data, int dataSize)
 {
-    filesys::ByteReader r({data, size_t(dataSize)}, true);
+    filesys::ByteReader r({data, size_t(dataSize)});
     if (!r.magic("FRES"))
         throw_error("not bfres");
+    
+    byte version0 = r.read<byte>();
+    byte version1 = r.read<byte>();
+    byte version2 = r.read<byte>();
+    byte version3 = r.read<byte>();
 
-    uin fileVersion = r.read<uin>();
-
-    short bom = r.read<u16>(); // FE FF read as LE
-    r.bigEndian = bom == 0xFFFE;
+    r.bigEndian = r.read<u16>() == 0xFFFE;
 
     short headerSize = r.read<short>();
     uin fileSize = r.read<uin>();
@@ -128,11 +139,43 @@ void* BFRESFileOperator::onFileBytes(byte* data, int dataSize)
     uin stringTblLen = r.read<uin>();
     uin stringTblOffset = r.read<uin>(); // add 0x1C
 
-    uin* indexGroupOffsets = r.read_array<uin>(12);
-    u16* indexGroupCounts = r.read_array<u16>(12);
+    const size_t* indexGroupOffsets = r.read_offset_array(12);
+    const u16* indexGroupCounts = r.read_array<u16>(12);
 
     uin unk0 = r.read<uin>();
 
-    
+    var dictionaries = std::vector<BfresFile::Dictionary>(12);
+    for (int i = 0; i < 12; ++i)
+    {
+        var offset = indexGroupOffsets[i];
+        uin count = indexGroupCounts[i];
 
+        var dictionary = BfresFile::Dictionary{};
+
+        if (count > 0)
+        {
+            r.seek(offset);
+            uin size = r.read<uin>();
+            uin objectCount = r.read<uin>();
+            for (int j = 0; j < objectCount + 1; ++j)
+            {
+                uin bitPosition = r.read<uin>();
+                u16 leftIndex = r.read<u16>();
+                u16 rightIndex = r.read<u16>();
+                var name = r.read_string_offset();
+                var dataOffset = r.read_rel_offset();
+
+                if (j == 0)
+                    continue;
+
+                var node = BfresFile::DictionaryNode{};
+                node.dataOffset = dataOffset;
+                dictionary.nodes.push_back(node);
+            }
+        }
+        dictionaries[i] = dictionary;
+    }
+
+    
+    return nullptr;
 }

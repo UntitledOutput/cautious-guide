@@ -14,6 +14,7 @@ void SplatGame::on_init(Engine& engine)
     SplatActions actions;
     actions.register_with(engine.actions());
     engine.filesystem().register_file_operator( SARCFileOperator::initialize(engine) );
+    engine.filesystem().register_file_operator(BFRESFileOperator::initialize(engine));
 
     var shader_descriptor = graphics::ShaderDescriptor{};
     shader_descriptor.vertexSource = engine.filesystem().read_file_str("assets/shaders/basic.vert");

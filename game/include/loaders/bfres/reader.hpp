@@ -61,6 +61,17 @@ namespace filesys
             return off == 0 ? 0 : size_t(int64_t(at) + off);
         }
 
+        size_t* read_offset_array(size_t count) {
+            size_t* c = new size_t[count];
+
+            for (int i = 0; i < count; ++i)
+            {
+                c[i] = read_rel_offset();
+            }
+
+            return c;
+        }
+
         std::string string_at(size_t at) const
         {
             if (at >= data.size())
@@ -68,6 +79,13 @@ namespace filesys
             const auto* begin = reinterpret_cast<const char*>(data.data() + at);
             return {begin, strnlen(begin, data.size() - at)};
         }
+
+        std::string read_string_offset()
+        {
+            const size_t offset = read_rel_offset();
+            return offset == 0 ? std::string{} : string_at(offset);
+        }
+
 
         bool magic(const char (&m)[5])
         {
