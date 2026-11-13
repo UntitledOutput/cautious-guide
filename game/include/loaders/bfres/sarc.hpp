@@ -40,8 +40,7 @@ struct BfresFile
             math::mat4 inverseMatrix;
 
             u16 index;
-            const unsigned short* parentIndices;
-            int parentCount;
+            std::vector<u16> parentIndices;
             std::vector<FsklBone> parents;
         };
 
@@ -97,7 +96,8 @@ struct BfresFile
 
         struct FvtxVertexData
         {
-            const byte* data;
+            const byte* data = nullptr;
+            u16 stride;
             std::vector<FvtxVertexAttribute> attributes;
         };
 
@@ -105,11 +105,138 @@ struct BfresFile
         std::vector<FvtxVertexData> data;
     };
 
+    struct FMAT
+    {
+
+        
+        enum class FmatRenderParameterType : byte
+        {
+            /// <summary>
+            /// Probably represents an array of 8 zero bytes.
+            /// </summary>
+            Null8Bytes = 0x00,
+
+            /// <summary>
+            /// Probably represents 2 Vector2F instances.
+            /// </summary>
+            Vector2F = 0x01,
+
+            /// <summary>
+            /// Represents the offset to a string.
+            /// </summary>
+            StringOffset = 0x02
+        };
+
+
+        enum class FmatMaterialParameterType : byte
+        {
+            /// <summary>
+            /// Represents a signed integer, having a size of 4 bytes.
+            /// </summary>
+            Int32 = 0x04,
+
+            /// <summary>
+            /// Represents a float, having a size of 4 bytes.
+            /// </summary>
+            Single = 0x0C,
+
+            /// <summary>
+            /// Represents a float vector with 2 components, having a size of 8 bytes.
+            /// </summary>
+            Vector2F = 0x0D,
+
+            /// <summary>
+            /// Represents a float vector with 3 components, having a size of 12 bytes.
+            /// </summary>
+            Vector3F = 0x0E,
+
+            /// <summary>
+            /// Represents a float vector with 4 components, having a size of 16 bytes.
+            /// </summary>
+            Vector4F = 0x0F,
+
+            /// <summary>
+            /// Represents a 2x3 texture matrix, having a size of 24 bytes.
+            /// </summary>
+            Matrix2x3 = 0x1E
+        };
+
+        struct FMATRenderParameter
+        {
+            std::string name;
+            FmatRenderParameterType type;
+            
+            const byte* nullBytesValue;
+            math::vec2 vector2Value;
+            std::string stringValue;
+        };
+
+        struct FMATTextureSelector
+        {
+            std::string name;
+            size_t textureOffset;
+            // todo: add field for texture itself
+        };
+
+        struct FMATTextureAttributeSelector
+        {
+            std::string name;
+            byte index;
+        };
+
+        struct FMATMaterialParameter
+        {
+            std::string name;
+            FmatMaterialParameterType type;
+
+            int intValue;
+            float singleValue;
+            math::vec2 vector2Value;
+            math::vec3 vector3Value;
+            math::vec4 vector4Value;
+            math::mat4 matrixValue;
+        };
+
+
+        struct FMATShaderControl
+        {
+            std::string vertexShaderName;
+            std::string fragmentShaderName;
+
+            std::vector<std::string> vertexShaderInputs;
+            std::vector<std::string> fragmentShaderInputs;
+
+            std::vector<std::string> parameters;
+        };
+
+        struct FMATShadowParameter
+        {
+            std::string name;
+            uint value;
+        };
+
+        std::string name;
+        std::vector<FMATRenderParameter> renderParams;
+        std::vector<FMATTextureSelector> textureSelectors;
+        std::vector<FMATTextureAttributeSelector> textureAttributeSelectors;
+        std::vector<FMATMaterialParameter> materialParameters;
+
+        FMATShaderControl shaderControl;
+        std::vector<FMATShadowParameter> shadowParameters;
+    };
+
+    struct FSHP
+    {
+        
+    };
+
     struct FMDL
     {
         std::string name;
         FSKL skeleton;
         std::vector<FvtxVertexBuffer> vertexBuffers;
+        std::vector<FMAT> materials;
+        std::vector<FSHP> shapes;
     };
 
     std::vector<FMDL> models;

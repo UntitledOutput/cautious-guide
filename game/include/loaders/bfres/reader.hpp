@@ -34,23 +34,27 @@ namespace filesys
         }
 
         template <typename T>
+        std::vector<T> read_list(size_t count)
+        {
+            if (remaining() < sizeof(T) * count)
+                throw_error("read past end of data");
+            std::vector<T> out(count);
+            for (size_t i = 0; i < count; ++i)
+                out[i] = read<T>();
+            return out;
+        }
+
+        template <typename T>
         const T* read_array(size_t count)
         {
+            static_assert(sizeof(T) == 1, "raw pointer reads skip byte swapping, use read_list");
             if (remaining() < sizeof(T) * count)
                 throw_error("read past end of data");
             const T* ptr = reinterpret_cast<const T*>(data.data() + pos);
             pos += sizeof(T) * count;
             return ptr;
         }
-
-        template <typename T>
-        const std::vector<T> read_list(size_t count)
-        {
-            var array = read_array<T>(count);
-
-            return std::vector<T>(array,array+count);
-        }
-
+        
         template <typename T>
         T peek(size_t at) const
         {
@@ -94,6 +98,10 @@ namespace filesys
             return offset == 0 ? std::string{} : string_at(offset);
         }
 
+        math::vec2 read_vec2()
+        {
+            return { read<float>(), read<float>() };
+        }
         math::vec3 read_vec3() { return {read<float>(), read<float>(), read<float>()}; }
         math::quat read_quat() { return {read<float>(), read<float>(), read<float>(), read<float>()}; }
         math::vec4 read_vec4() { return {read<float>(), read<float>(), read<float>(), read<float>()}; }

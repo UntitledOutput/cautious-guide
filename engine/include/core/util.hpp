@@ -16,6 +16,7 @@ using flt = float;
 using dblc = const double;
 using fltc = const float;
 using byte = unsigned char;
+using sbyte = char;
 
 
 #define cdbl (double)
