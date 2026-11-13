@@ -10,7 +10,7 @@
 using u8 = std::uint8_t;
 using u16 = std::uint16_t;
 using u32 = std::uint32_t;
-using uin = unsigned int;
+using uint = unsigned int;
 using dbl = double;
 using flt = float;
 using dblc = const double;

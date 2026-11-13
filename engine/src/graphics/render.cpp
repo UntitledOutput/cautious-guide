@@ -44,25 +44,25 @@ namespace
         u32 pad[2];
     };
 
-    uin make_buffer(GLsizeiptr bytes)
+    uint make_buffer(GLsizeiptr bytes)
     {
-        uin buf = 0;
+        uint buf = 0;
         glGenBuffers(1, &buf);
         glBindBuffer(GL_COPY_WRITE_BUFFER, buf);
         glBufferStorage(GL_COPY_WRITE_BUFFER, bytes, nullptr, GL_DYNAMIC_STORAGE_BIT);
         return buf;
     }
 
-    uin make_shader(GLenum type,const char* src) {
-        uin shader = glCreateShader(type);
+    uint make_shader(GLenum type,const char* src) {
+        uint shader = glCreateShader(type);
         glShaderSource(shader, 1, &src, NULL);
         glCompileShader(shader);
 
         return shader;
     }
 
-    uin make_program(uin* shaders, int shader_count) {
-        uin program = glCreateProgram();
+    uint make_program(uint* shaders, int shader_count) {
+        uint program = glCreateProgram();
 
         for (int i = 0; i < shader_count; i++) {
             glAttachShader(program,shaders[i]);
@@ -75,7 +75,7 @@ namespace
         return program;
     }
 
-    uin make_texture(const graphics::TextureDescriptor& d)
+    uint make_texture(const graphics::TextureDescriptor& d)
     { 
         GLenum internal = GL_RGBA8;
         switch (d.format)
@@ -86,7 +86,7 @@ namespace
         case GL_RGBA: internal = d.sRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8; break;
         }
 
-        uin tex = 0;
+        uint tex = 0;
         glGenTextures(1, &tex);
         glBindTexture(GL_TEXTURE_2D, tex);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -117,16 +117,16 @@ namespace
     }
 
     // immutable storage can't be resized, so allocate a bigger one and copy over
-    uin grow_buffer(uin old, GLsizeiptr usedBytes, GLsizeiptr newBytes)
+    uint grow_buffer(uint old, GLsizeiptr usedBytes, GLsizeiptr newBytes)
     {
-        uin buf = make_buffer(newBytes);
+        uint buf = make_buffer(newBytes);
         glBindBuffer(GL_COPY_READ_BUFFER, old);
         glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, usedBytes);
         glDeleteBuffers(1, &old);
         return buf;
     }
 
-    void upload(uin buf, GLintptr offset, GLsizeiptr bytes, const void* data)
+    void upload(uint buf, GLintptr offset, GLsizeiptr bytes, const void* data)
     {
         glBindBuffer(GL_COPY_WRITE_BUFFER, buf);
         glBufferSubData(GL_COPY_WRITE_BUFFER, offset, bytes, data);
@@ -167,7 +167,7 @@ namespace
         return type == GL_SAMPLER_2D || type == GL_SAMPLER_2D_ARRAY || type == GL_SAMPLER_CUBE;
     }
 
-    std::string resource_name(uin program, GLenum iface, GLuint index, GLint len)
+    std::string resource_name(uint program, GLenum iface, GLuint index, GLint len)
     {
         std::string name(len, '\0');
         glGetProgramResourceName(program, iface, index, len, nullptr, name.data());
@@ -175,7 +175,7 @@ namespace
         return name;
     }
 
-    graphics::ShaderLayout reflect(uin program)
+    graphics::ShaderLayout reflect(uint program)
     {
         graphics::ShaderLayout layout;
 
@@ -293,7 +293,7 @@ u32 RenderMgr::push_joints(std::span<const math::mat4> joints)
 
 ShaderHandle RenderMgr::create_shader(const ShaderDescriptor& descriptor) {
 
-    uin* _shaders = new uin[2]; // todo: allow multiple stages
+    uint* _shaders = new uint[2]; // todo: allow multiple stages
     _shaders[0] = make_shader(GL_VERTEX_SHADER,descriptor.vertexSource.c_str());
     _shaders[1] = make_shader(GL_FRAGMENT_SHADER,descriptor.fragmentSource.c_str());
     
@@ -469,8 +469,8 @@ void RenderMgr::flush()
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, joint_binding, jointBuffer);
     }
 
-    uin curProgram = 0;
-    uin curVao = 0;
+    uint curProgram = 0;
+    uint curVao = 0;
     u32 curMaterial = UINT32_MAX;
     RenderState curState{};
     bool firstState = true;
@@ -506,7 +506,7 @@ void RenderMgr::flush()
             firstState = false;
         }
 
-        const uin vao = pools.at(mesh.fmt).vao;
+        const uint vao = pools.at(mesh.fmt).vao;
         if (vao != curVao)
         {
             glBindVertexArray(vao);

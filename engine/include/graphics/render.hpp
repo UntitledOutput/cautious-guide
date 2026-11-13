@@ -111,7 +111,7 @@ namespace graphics
     private:
         struct FormatPool
         {
-            uin vao = 0, vbo = 0, ibo = 0;
+            uint vao = 0, vbo = 0, ibo = 0;
             u32 vertexCt = 0, indexCt = 0;
             u32 vertexCap = 0, indexCap = 0;
         };
@@ -128,11 +128,11 @@ namespace graphics
 
         RenderConfiguration cfg;
 
-        uin materialBuffer = 0;
+        uint materialBuffer = 0;
         u32 materialStride = 256;
         u32 materialCap = 0;
 
-        uin jointBuffer = 0;
+        uint jointBuffer = 0;
         u32 jointCap = 0;
         std::vector<math::mat4> jointStaging;
 
@@ -147,8 +147,8 @@ namespace graphics
         std::unordered_map<VertexFormat, FormatPool> pools;
 
         CameraData camera_{};
-        uin cameraBuffer = 0;
-        uin objectBuffer = 0;
+        uint cameraBuffer = 0;
+        uint objectBuffer = 0;
         u32 objectCap = 0;
         std::vector<byte> objectStaging;
     };

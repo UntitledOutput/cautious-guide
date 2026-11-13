@@ -44,6 +44,14 @@ namespace filesys
         }
 
         template <typename T>
+        const std::vector<T> read_list(size_t count)
+        {
+            var array = read_array<T>(count);
+
+            return std::vector<T>(array,array+count);
+        }
+
+        template <typename T>
         T peek(size_t at) const
         {
             if (at > data.size() || data.size() - at < sizeof(T))
@@ -85,6 +93,30 @@ namespace filesys
             const size_t offset = read_rel_offset();
             return offset == 0 ? std::string{} : string_at(offset);
         }
+
+        math::vec3 read_vec3() { return {read<float>(), read<float>(), read<float>()}; }
+        math::quat read_quat() { return {read<float>(), read<float>(), read<float>(), read<float>()}; }
+        math::vec4 read_vec4() { return {read<float>(), read<float>(), read<float>(), read<float>()}; }
+        math::mat4 read_mat4()
+        {
+            math::mat4 m = math::mat4::identity();
+            for (int i = 0; i < 4; ++i)
+            {
+                m[i] = read_vec4();
+            }
+            return m;
+        }
+
+        math::mat4 read_mat3()
+        {
+            math::mat4 m = math::mat4::identity();
+            for (int i = 0; i < 3; ++i)
+            {
+                m[i] = read_vec4();
+            }
+            return m;
+        }
+
 
 
         bool magic(const char (&m)[5])
