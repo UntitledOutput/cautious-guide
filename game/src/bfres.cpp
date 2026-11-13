@@ -542,7 +542,7 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
     u16 skeletonIndexArrayCount = r.read<u16>();
     r.read<byte>();
     var lodModelCount = r.read<byte>();
-    var visiblityNodeCount = r.read<u32>();
+    var visibilityNodeCount = r.read<u32>();
     r.read<u32>();
 
     var vertexBufferOffset = r.read_rel_offset();
@@ -551,7 +551,7 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
 
     r.read<u32>();
 
-    var visiblityNodesOffset = r.read_rel_offset();
+    var visibilityNodesOffset = r.read_rel_offset();
     var visibilityRangesOffset = r.read_rel_offset();
     var visibilityIndicesOffset = r.read_rel_offset();
 
@@ -566,9 +566,92 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
         r.read<u32>();
 
         lodModel.totalPointCount = r.read<u32>();
-    }
-    
+        lodModel.visibilityGroups = std::vector<bfrs::FSHP::FSHPVisibilityGroup>(r.read<u16>());
 
+        r.read<u16>();
+        var visibilityGroupOffset = r.read_rel_offset();
+        var indexBufferOffset = r.read_rel_offset();
+        lodModel.skipElements = r.read<u32>();
+
+        var pos = r.position();
+
+        r.seek(visibilityGroupOffset);
+        for (int j = 0; j < lodModel.visibilityGroups.size(); j++)
+        {
+            var grp = bfrs::FSHP::FSHPVisibilityGroup{};
+
+            grp.offset = r.read<u32>();
+            grp.count = r.read<u32>();
+
+            lodModel.visibilityGroups[j] = grp;
+        }
+
+        r.seek(indexBufferOffset);  
+        {
+            r.read<u32>();
+            var indexBufferSize = r.read<u32>();
+
+            r.read<u32>();
+            r.read<u32>();
+            r.read<u32>();
+            var dataOffset = r.read_rel_offset();
+
+            var indexBuffer = bfrs::FSHP::FSHPIndexBuffer{};
+
+            r.seek(dataOffset);
+            indexBuffer.data = r.read_list<u16>(indexBufferSize / 2);
+
+            lodModel.indexBuffer = indexBuffer;
+        }
+
+        r.seek(pos);
+
+        shape.lodModels.push_back(lodModel);
+    }
+
+    r.seek(visibilityNodesOffset);
+    for (int i = 0; i < visibilityNodeCount; i++)
+    {
+        var visibilityNode = bfrs::FSHP::FSHPVisibilityNode{};
+
+        visibilityNode.leftNodeIndex = r.read<u16>();
+        visibilityNode.rightNodeIndex = r.read<u16>();
+
+        r.read<u16>();
+        var siblingIndex = r.read<u16>();
+        visibilityNode.visibilityGroupIndex = r.read<u16>();
+        visibilityNode.visibilityGroups = std::vector<bfrs::FSHP::FSHPVisibilityGroup>(r.read<u16>());
+
+        shape.visibilityNodes.push_back(visibilityNode);
+    }
+
+    r.seek(visibilityRangesOffset);
+    for (int i = 0; i < visibilityNodeCount; i++)
+    {
+        var node = shape.visibilityNodes[i];
+
+        if (node.leftNodeIndex != i)
+            node.leftNode = &shape.visibilityNodes[node.leftNodeIndex];
+        if (node.rightNodeIndex != i)
+            node.rightNode = &shape.visibilityNodes[node.rightNodeIndex];
+
+        for (int j = 0; j < node.visibilityGroups.size(); j++)
+        {
+            node.visibilityGroups[j] = shape.lodModels[0].visibilityGroups[j + node.visibilityGroupIndex];
+        }
+        
+        
+        r.read_vec3();
+        r.read_vec3();
+        
+    }    
+
+    r.seek(visibilityIndicesOffset);
+    shape.visibilityIndices = r.read_list<u16>(visibilityNodeCount);
+
+    r.seek(skeletonIndexArrayOffset);
+    shape.skeletonOffsets = r.read_list<u16>(skeletonIndexArrayCount);
+    
     return shape;
 }
 

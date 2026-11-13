@@ -244,11 +244,15 @@ struct BfresFile
             std::vector<FSHPVisibilityGroup> visibilityGroups;
             uint totalPointCount;
             uint skipElements;
+            FSHPIndexBuffer indexBuffer;
         };
 
-        struct FSHPVisiblityNode {
-            FSHPVisiblityNode* leftNode;
-            FSHPVisiblityNode* rightNode;
+        struct FSHPVisibilityNode {
+            FSHPVisibilityNode* leftNode;
+            u16 leftNodeIndex;
+            FSHPVisibilityNode* rightNode;
+            u16 rightNodeIndex;
+            u16 visibilityGroupIndex;
             std::vector<FSHPVisibilityGroup> visibilityGroups;
         };
         
@@ -261,7 +265,7 @@ struct BfresFile
         u16 vertexBufferIndex;
 
         std::vector<FSHPLodModel> lodModels;
-        std::vector<FSHPVisiblityNode> visibilityNodes;
+        std::vector<FSHPVisibilityNode> visibilityNodes;
         std::vector<u16> visibilityIndices;
         std::vector<u16> skeletonOffsets;
     };
