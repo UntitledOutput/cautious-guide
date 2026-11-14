@@ -20,6 +20,7 @@ struct BfresModel
 {
     std::vector<graphics::ModelData> models;
     std::vector<graphics::TextureData> textures;
+    std::vector<graphics::AnimationData> animations;
 };
 
 struct BfresFile
@@ -482,8 +483,136 @@ struct BfresFile
         std::span<const byte> data;
     };
 
+
+    enum class SkeletalAnimFlags : uint
+    {
+        /// <summary>
+        /// The stored curve data has been baked.
+        /// </summary>
+        BakedCurve = 1 << 0,
+
+        /// <summary>
+        /// The animation repeats from the start after the last frame has been played.
+        /// </summary>
+        Looping = 1 << 2
+    };
+
+
+    enum class SkeletalAnimFlagsScale : uint
+    {
+        /// <summary>
+        /// No scaling.
+        /// </summary>
+        None,
+
+        /// <summary>
+        /// Default scaling.
+        /// </summary>
+        Standard = 1 << 8,
+
+        /// <summary>
+        /// Autodesk Maya scaling.
+        /// </summary>
+        Maya = 2 << 8,
+
+        /// <summary>
+        /// Autodesk Softimage scaling.
+        /// </summary>
+        Softimage = 3 << 8
+    };
+
+    /// <summary>
+    /// Represents the data format in which rotation values are stored.
+    /// </summary>
+    enum class SkeletalAnimFlagsRotate : uint
+    {
+        /// <summary>
+        /// Quaternion, 4 components.
+        /// </summary>
+        Quaternion,
+
+        /// <summary>
+        /// Euler XYZ, 3 components.
+        /// </summary>
+        EulerXYZ = 1 << 12
+    };
+
+    struct FSKA
+    {
+        enum class FrameType : u8
+        {
+            Float = 0,
+            Fixed10x5 = 1,
+            Byte = 2
+        };
+        enum class KeyType : u8
+        {
+            Float = 0,
+            Int16 = 1,
+            SByte = 2
+        };
+        enum class CurveType : u8
+        {
+            Cubic = 0,
+            Linear = 1,
+            BakedFloat = 2,
+            StepInt = 4,
+            BakedInt = 5,
+            StepBool = 6,
+            BakedBool = 7
+        };
+        enum class WrapMode : u8
+        {
+            Clamp = 0,
+            Repeat = 1,
+            Mirror = 2
+        };
+
+        struct FSKAAnimCurve
+        {
+
+
+
+            FrameType frameType;
+            KeyType keyType;
+            CurveType curveType;
+            WrapMode preWrap;
+            WrapMode postWrap; 
+
+            u32 target;
+            float startFrame;
+            float endFrame;
+            float scale;
+            float offset;
+            float delta;
+            std::vector<float> frames;
+            std::vector<float> keys;
+
+        };
+
+        struct FSKABoneAnim
+        {
+            std::string name;
+            u32 flags;
+            math::vec3 baseScale;
+            math::vec4 baseRotation;
+            math::vec3 baseTranslation;
+            std::vector<FSKAAnimCurve> curves;
+        };
+
+        std::string name;
+        u32 flags;
+        u32 frameCount;
+        std::vector<FSKABoneAnim> bones;
+        
+        bool loops() const { return flags & 0x4; }
+        bool eulerRotation() const { return (flags & 0x7000) == 0x1000; }
+    };
+
     std::vector<FMDL> models;
     std::vector<FTEX> textures;
+    std::vector<FSKA> skeletalAnims;
+    ;
 
     BfresModel parse();
 };

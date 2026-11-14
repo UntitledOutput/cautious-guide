@@ -4,6 +4,7 @@
 
 #include "graphics/model.hpp"
 #include "loaders/bfres/sarc.hpp"
+#include "loaders/bfres/gx2.hpp"
 
 using bfrs = BfresFile;
 
@@ -101,6 +102,48 @@ std::vector<T> read_attribute(const BfresFile::FvtxVertexBuffer& vb, std::string
             return out;
         }
     return {};
+}
+
+// splatoon animates at 60fps
+constexpr float anim_fps = 60.0f;
+
+float sample_curve(const bfrs::FSKA::FSKAAnimCurve& c, float frame)
+{
+    using Type = bfrs::FSKA::CurveType;
+
+    if (c.frames.empty())
+        return 0.0f;
+
+    if (c.curveType == Type::BakedFloat || c.curveType == Type::BakedInt || c.curveType == Type::BakedBool)
+    {
+        const float local = std::clamp(frame - c.startFrame, 0.0f, float(c.keys.size() - 1));
+        return c.keys[size_t(local)];
+    }
+
+    const size_t per = c.curveType == Type::Cubic ? 4 : c.curveType == Type::Linear ? 2 : 1;
+    const size_t last = c.frames.size() - 1;
+
+    if (frame <= c.frames.front())
+        return c.keys[0];
+
+    size_t i = size_t(std::upper_bound(c.frames.begin(), c.frames.end(), frame) - c.frames.begin()) - 1;
+    if (i >= last)
+        return c.keys[last * per];
+
+    const float span = c.frames[i + 1] - c.frames[i];
+    const float t = span > 0.0f ? (frame - c.frames[i]) / span : 0.0f;
+    const float* k = &c.keys[i * per];
+
+    if (per == 4)
+        return k[0] + t * (k[1] + t * (k[2] + t * k[3]));
+    if (per == 2)
+        return k[0] + t * k[1];
+    return k[0];
+}
+
+math::quat euler_zyx(float x, float y, float z)
+{
+    return math::angle_axis(z, {0, 0, 1}) * math::angle_axis(y, {0, 1, 0}) * math::angle_axis(x, {1, 0, 0});
 }
 
 std::vector<SarcFile> sarc_read(std::span<const byte> src)
@@ -970,24 +1013,356 @@ bfrs::FTEX load_texture(filesys::ByteReader& r)
 
 graphics::TextureData parse_texture(bfrs::FTEX& tex)
 {
+    if (tex.depth > 1)
+        throw_error("ftex: 3d/array/cube textures aren't supported yet: " + tex.name);
+
+    const gx2::Surface s{tex.width, tex.height, u32(tex.format), u32(tex.tileMode), tex.swizzle, tex.pitch};
+
     graphics::TextureData data;
+    data.name = tex.name;
     data.width = tex.width;
     data.height = tex.height;
-
-
-
+    data.format = graphics::TextureFormat::RGBA8;
+    data.srgb = (u32(tex.format) & 0x400) != 0;
+    data.mips.push_back(gx2::decode_rgba8(s.format, tex.width, tex.height, gx2::deswizzle(s, tex.data)));
     return data;
 }
-  
+
+bfrs::FSKA::FSKAAnimCurve load_anim_curve(filesys::ByteReader& r)
+{
+    bfrs::FSKA::FSKAAnimCurve curve {};
+
+    var flags = r.read<u16>();
+    curve.frameType = (bfrs::FSKA::FrameType)(flags & 3);
+    curve.keyType = (bfrs::FSKA::KeyType)((flags >> 2) & 3);
+    curve.curveType = (bfrs::FSKA::CurveType)((flags >> 4) & 7);
+    curve.preWrap = (bfrs::FSKA::WrapMode)((flags >> 8) & 3);
+    curve.postWrap = (bfrs::FSKA::WrapMode)((flags >> 12) & 3);
+
+    var keyCount = r.read<u16>();
+    curve.target = r.read<u32>();
+
+    curve.startFrame = r.read<float>();
+    curve.endFrame = r.read<float>();
+    curve.scale = r.read<float>();
+    curve.offset = r.read<float>();
+    curve.delta = r.read<float>();
+
+    var framesOffset = r.read_rel_offset();
+    var keysOffset = r.read_rel_offset();
+
+    r.seek(framesOffset);
+    curve.frames.reserve(keyCount);
+    for (u16 k = 0; k < keyCount; ++k)
+    {
+        switch (curve.frameType)
+        {
+            case bfrs::FSKA::FrameType::Float:
+                curve.frames.push_back(r.read<float>());
+                break;
+            case bfrs::FSKA::FrameType::Fixed10x5:
+                curve.frames.push_back(r.read<int16_t>() / 32.0f);
+                break;
+            case bfrs::FSKA::FrameType::Byte:
+                curve.frames.push_back(float(r.read<u8>()));
+                break;
+            default:
+                throw_error("fska: unknown frame type");
+        }
+    }
+
+    u32 elementsPerKey = 1;
+    if (curve.curveType == bfrs::FSKA::CurveType::Cubic)
+        elementsPerKey = 4;
+    else if (curve.curveType == bfrs::FSKA::CurveType::Linear)
+        elementsPerKey = 2;
+
+    const bool integerKeys =
+        curve.curveType == bfrs::FSKA::CurveType::StepInt || curve.curveType == bfrs::FSKA::CurveType::StepBool;
+
+    r.seek(keysOffset);
+    curve.keys.reserve(size_t(keyCount) * elementsPerKey);
+    for (size_t k = 0; k < size_t(keyCount) * elementsPerKey; ++k)
+    {
+        switch (curve.keyType)
+        {
+            case bfrs::FSKA::KeyType::Float:
+                curve.keys.push_back(integerKeys ? float(r.read<u32>()) : r.read<float>());
+                break;
+            case bfrs::FSKA::KeyType::Int16:
+                curve.keys.push_back(float(r.read<int16_t>()));
+                break;
+            case bfrs::FSKA::KeyType::SByte:
+                curve.keys.push_back(float(r.read<int8_t>()));
+                break;
+            default:
+                throw_error("fska: unknown key type");
+        }
+    }
+
+    for (size_t k = 0; k < curve.keys.size(); ++k)
+    {
+        curve.keys[k] *= curve.scale;
+        if (k % elementsPerKey == 0)
+            curve.keys[k] += curve.offset;
+    }
+
+    return curve;
+}
+
+BfresFile::FSKA load_skeletal_animation(filesys::ByteReader& r)
+{
+    bfrs::FSKA fska {};
+
+    if (!r.magic("FSKA"))
+        throw_error("not fska");
+
+    fska.name = r.read_string_offset();
+    var path = r.read_string_offset();
+
+    fska.flags = r.read<u32>();
+    fska.frameCount = r.read<u32>();
+
+    var boneAnimCount = r.read<u16>();
+    r.read<u16>(); // user data
+    var curveCount = r.read<u32>();
+    var bakedSize = r.read<u32>();
+
+    var boneAnimArrayOffset = r.read_rel_offset();
+    var bindSkeletonOffset = r.read_rel_offset();
+    var bindIndexArrayOffset = r.read_rel_offset();
+
+    // bone anims
+    r.seek(boneAnimArrayOffset);
+    for (int i = 0; i < boneAnimCount; ++i)
+    {
+        r.seek(boneAnimArrayOffset + size_t(i) * 24);
+        bfrs::FSKA::FSKABoneAnim anim{};
+
+        anim.flags = r.read<u32>();
+        anim.name = r.read_string_offset();
+        var beginRotate = r.read<byte>();
+        var beginTranslate = r.read<byte>();
+        var _curveCount = r.read<byte>();
+        var beginBaseTranslate = r.read<byte>();
+        var beginCurve = r.read<byte>();
+        r.skip(3);
+        var curveArrayOffset = r.read_rel_offset();
+        var baseDataOffset = r.read_rel_offset();
+            
+        r.seek(baseDataOffset);
+        {
+            if (anim.flags & 0x08)
+            {
+                anim.baseScale = r.read_vec3();
+            }
+            if (anim.flags & 0x10)
+            {
+                anim.baseRotation = r.read_vec4();
+            }
+            if (anim.flags & 0x20)
+            {
+                anim.baseTranslation = r.read_vec3();
+            }
+        }
+
+        for (int j = 0; j < _curveCount; ++j)
+        {
+            r.seek(curveArrayOffset + j * 36);
+            anim.curves.push_back(load_anim_curve(r));
+        }
+
+        fska.bones.push_back(anim);
+    }
+
+    return fska;
+}
+
+graphics::AnimationData parse_skeletal_animation(const bfrs::FSKA& fska, const bfrs::FSKL& skeleton)
+{
+    using graphics::AnimPath;
+
+    graphics::AnimationData anim{};
+    anim.name = fska.name;
+    anim.duration = float(fska.frameCount) / anim_fps;
+
+    const bool euler = fska.eulerRotation();
+    const u32 frameCount = fska.frameCount;
+
+    for (const auto& boneAnim : fska.bones)
+    {
+        u32 node = UINT32_MAX;
+        for (size_t b = 0; b < skeleton.bones.size(); ++b)
+            if (skeleton.bones[b].name == boneAnim.name)
+            {
+                node = u32(b);
+                break;
+            }
+        if (node == UINT32_MAX)
+            continue;
+
+        const auto& bone = skeleton.bones[node];
+
+        // 0..2 scale, 3..6 rotation, 7..9 translation
+        float base[10];
+        const bool hasScale = boneAnim.flags & 0x08;
+        const bool hasRotate = boneAnim.flags & 0x10;
+        const bool hasTranslate = boneAnim.flags & 0x20;
+
+        const math::vec3 s = hasScale ? boneAnim.baseScale : bone.scale;
+        const math::vec3 t = hasTranslate ? boneAnim.baseTranslation : bone.position;
+        math::vec4 r = hasRotate ? boneAnim.baseRotation : math::vec4{0.0f, 0.0f, 0.0f, 1.0f};
+        if (!hasRotate && !euler)
+            r = {bone.rotation.x, bone.rotation.y, bone.rotation.z, bone.rotation.w};
+
+        base[0] = s.x;
+        base[1] = s.y;
+        base[2] = s.z;
+        base[3] = r.x;
+        base[4] = r.y;
+        base[5] = r.z;
+        base[6] = r.w;
+        base[7] = t.x;
+        base[8] = t.y;
+        base[9] = t.z;
+
+        // base values set the pose even without curves (that's how static poses are stored)
+        bool animScale = hasScale, animRotate = hasRotate, animTranslate = hasTranslate;
+        for (const auto& c : boneAnim.curves)
+        {
+            if (c.target >= 0x04 && c.target <= 0x0C)
+                animScale = true;
+            else if (c.target >= 0x10 && c.target <= 0x18)
+                animTranslate = true;
+            else if (c.target >= 0x20 && c.target <= 0x2C)
+                animRotate = true;
+        }
+
+        auto slot = [](u32 target) -> int
+        {
+            switch (target)
+            {
+                case 0x04:
+                    return 0;
+                case 0x08:
+                    return 1;
+                case 0x0C:
+                    return 2;
+                case 0x20:
+                    return 3;
+                case 0x24:
+                    return 4;
+                case 0x28:
+                    return 5;
+                case 0x2C:
+                    return 6;
+                case 0x10:
+                    return 7;
+                case 0x14:
+                    return 8;
+                case 0x18:
+                    return 9;
+                default:
+                    return -1;
+            }
+        };
+
+        graphics::AnimationData::Channel sc, rc, tc;
+        sc.node = rc.node = tc.node = node;
+        sc.path = AnimPath::Scale;
+        rc.path = AnimPath::Rotation;
+        tc.path = AnimPath::Translation;
+        sc.interp = rc.interp = tc.interp = graphics::AnimInterp::Linear;
+
+        const u32 lastFrame = boneAnim.curves.empty() ? 0 : frameCount;
+        for (u32 f = 0; f <= lastFrame; ++f)
+        {
+            float v[10];
+            std::copy(std::begin(base), std::end(base), v);
+
+            for (const auto& c : boneAnim.curves)
+            {
+                const int i = slot(c.target);
+                if (i >= 0)
+                    v[i] = sample_curve(c, float(f));
+            }
+
+            const float time = float(f) / anim_fps;
+
+            if (animScale)
+            {
+                sc.times.push_back(time);
+                sc.values.push_back({v[0], v[1], v[2], 0.0f});
+            }
+            if (animRotate)
+            {
+                const math::quat q =
+                    math::normalize(euler ? euler_zyx(v[3], v[4], v[5]) : math::quat{v[3], v[4], v[5], v[6]});
+                rc.times.push_back(time);
+                rc.values.push_back({q.x, q.y, q.z, q.w});
+            }
+            if (animTranslate)
+            {
+                tc.times.push_back(time);
+                tc.values.push_back({v[7], v[8], v[9], 0.0f});
+            }
+        }
+
+        if (animScale)
+            anim.channels.push_back(std::move(sc));
+        if (animRotate)
+            anim.channels.push_back(std::move(rc));
+        if (animTranslate)
+            anim.channels.push_back(std::move(tc));
+    }
+
+    return anim;
+} 
+
 BfresModel BfresFile::parse()
 {
-    BfresModel model {};
+    BfresModel model{};
 
     for (auto& texture : textures)
         model.textures.push_back(parse_texture(texture));
 
+        std::vector<std::vector<graphics::AnimationData>> animsPerModel(models.size());
+    for (const auto& fska : skeletalAnims)
+    {
+        size_t best = SIZE_MAX, bestMatches = 0;
+        for (size_t m = 0; m < models.size(); ++m)
+        {
+            size_t matches = 0;
+            for (const auto& boneAnim : fska.bones)
+                for (const auto& bone : models[m].skeleton.bones)
+                    if (bone.name == boneAnim.name)
+                    {
+                        ++matches;
+                        break;
+                    }
+            if (matches > bestMatches)
+            {
+                best = m;
+                bestMatches = matches;
+            }
+        }
+        if (best == SIZE_MAX)
+            continue;
+
+        graphics::AnimationData anim = parse_skeletal_animation(fska, models[best].skeleton);
+        if (!anim.channels.empty())
+            animsPerModel[best].push_back(std::move(anim));
+    }
+
+    for (size_t m = 0; m < models.size(); ++m)
+    {
+        graphics::ModelData data = parse_model(models[m], model);
+        data.animations = std::move(animsPerModel[m]);
+        model.models.push_back(std::move(data));
+    }
+
     for (auto& value : models)
-        model.models.push_back(parse_model(value,model));
+        model.models.push_back(parse_model(value, model));
 
     return model;
 }
@@ -1038,6 +1413,13 @@ std::unique_ptr<BfresFile> load_bfres(std::span<const byte> data)
         r.seek(dictionaries[1].nodes[i].dataOffset);
         bfres->textures[i] = load_texture(r);
         bfres->textures[i].name = dictionaries[1].nodes[i].name;
+    }
+
+    bfres->skeletalAnims.resize(dictionaries[2].nodes.size());
+    for (int i = 0; i < dictionaries[2].nodes.size(); ++i)
+    {
+        r.seek(dictionaries[2].nodes[i].dataOffset);
+        bfres->skeletalAnims[i] = load_skeletal_animation(r);
     }
 
     return bfres;

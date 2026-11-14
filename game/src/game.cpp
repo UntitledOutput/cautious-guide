@@ -33,17 +33,24 @@ void SplatGame::on_init(Engine& engine)
             return h;
         });
 
-    judge.reset(static_cast<SarcArchive*>(engine.filesystem().read_file_auto("assets/Npc_Judge.szs")));
+    judge.reset(static_cast<SarcArchive*>(engine.filesystem().read_file_auto("assets/Fld_Crank00.szs")));
     const SarcFile* entry = judge->find("Output.bfres");
     if (!entry || !entry->bfres)
-        throw_error("Npc_Judge.szs has no Output.bfres");
+        throw_error("Fld_Crank00.szs has no Output.bfres");
 
     const BfresModel bfresModel = entry->bfres->parse();
 
     model = engine.models().generate(entry->bfres->models[0].name, bfresModel.models[0]);
     var e = scene::spawn_model(engine.world(), model);
-    engine.world().add<Animator>(e);
-    engine.world().add<Pose>(e);
+    //engine.world().add<Animator>(e);
+    //engine.world().add<Pose>(e);
+
+    /*
+    const auto& asset = engine.models().get(model);
+    for (u32 i = 0; i < asset.animations.size(); ++i)
+        if (asset.animations[i].name == "Win_L")
+            engine.world().get<Animator>(e).clip = i;
+    */
 
     _freecam = FreeCam{};
 
