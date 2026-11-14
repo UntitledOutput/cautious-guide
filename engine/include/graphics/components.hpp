@@ -24,6 +24,7 @@ struct Pose
 
 struct Animator
 {
+    graphics::ModelHandle animationModel = graphics::invalid_model;
     u32 clip = 0;
     float time = 0.0f;
     float speed = 1.0f;

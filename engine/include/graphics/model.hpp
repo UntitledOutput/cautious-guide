@@ -59,6 +59,7 @@ namespace graphics
         TextureFormat format = TextureFormat::RGBA8;
         std::vector<std::vector<byte>> mips; // mip 0 first, already deswizzled
         bool srgb = false;
+        std::string cacheKey;
     };
 
     using ParamValue = std::variant<float, int, math::vec2, math::vec3, math::vec4>;
@@ -187,6 +188,7 @@ namespace graphics
         std::vector<std::unique_ptr<ModelLoader>> loaders;
         std::vector<ModelAsset> assets;
         std::unordered_map<std::string, ModelHandle> byPath;
+        std::unordered_map<std::string, TextureHandle> textureCache;
     };
 
     void compute_node_world(std::span<const NodeData> nodes, std::span<math::mat4> out);

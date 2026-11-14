@@ -33,24 +33,30 @@ void SplatGame::on_init(Engine& engine)
             return h;
         });
 
-    judge.reset(static_cast<SarcArchive*>(engine.filesystem().read_file_auto("assets/Fld_Crank00.szs")));
-    const SarcFile* entry = judge->find("Output.bfres");
-    if (!entry || !entry->bfres)
-        throw_error("Fld_Crank00.szs has no Output.bfres");
+    judge.reset(static_cast<SarcArchive*>(engine.filesystem().read_file_auto("assets/Player.pack")));
+    var& entrySzs = judge->find("Model/Player00.szs")->archive;
+    const SarcFile* entry = entrySzs->find("Output.bfres");
 
-    const BfresModel bfresModel = entry->bfres->parse();
+    var& animSzs = judge->find("Model/Player00_anim.szs")->archive;
+    const SarcFile* animEntry = animSzs->find("Output.bfres");
 
-    model = engine.models().generate(entry->bfres->models[0].name, bfresModel.models[0]);
+    //const BfresModel bfresModel = entry->bfres->parse(nullptr);
+    const BfresModel animModel = animEntry->bfres->parse(entry->bfres.get());
+
+    model = engine.models().generate(entry->bfres->models[0].name, animModel.models[0]);
+
+    //var anims = engine.models().generate(animEntry->bfres->models[0].name, bfresModel.models[0]);
+
     var e = scene::spawn_model(engine.world(), model);
-    //engine.world().add<Animator>(e);
-    //engine.world().add<Pose>(e);
+    var animator = engine.world().add<Animator>(e);
+    engine.world().get<Animator>(e).animationModel = model;
+    engine.world().add<Pose>(e);
 
-    /*
     const auto& asset = engine.models().get(model);
     for (u32 i = 0; i < asset.animations.size(); ++i)
-        if (asset.animations[i].name == "Win_L")
+        if (asset.animations[i].name == "Wait_Shop")
             engine.world().get<Animator>(e).clip = i;
-    */
+    
 
     _freecam = FreeCam{};
 

@@ -72,12 +72,12 @@ namespace scene
 
     void run_animators(ecs::World& world, const graphics::ModelCache& models, float dt)
     {
-        world.view<Animator, ModelRenderer, Pose>().each(
-            [&](ecs::Entity, Animator& a, ModelRenderer& mr, Pose& pose)
+        world.view<Animator, Pose>().each(
+            [&](ecs::Entity, Animator& a, Pose& pose)
             {
-                if (mr.model == graphics::invalid_model)
+                if (a.animationModel == graphics::invalid_model)
                     return;
-                const auto& asset = models.get(mr.model);
+                const auto& asset = models.get(a.animationModel);
                 if (a.clip >= asset.animations.size())
                     return;
                 const auto& clip = asset.animations[a.clip];

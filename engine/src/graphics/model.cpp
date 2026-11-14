@@ -104,6 +104,9 @@ ModelHandle ModelCache::generate(std::string key,const ModelData& data)
     if (!resolver)
         throw_error("set a material resolver before loading models");
 
+    if (auto it = byPath.find(key); it != byPath.end())
+        return it->second;
+
     assets.push_back(upload(data));
     const ModelHandle h = ModelHandle(assets.size() - 1);
     byPath.emplace(key, h);
@@ -146,13 +149,24 @@ ModelAsset ModelCache::upload(const ModelData& data)
     textures.reserve(data.textures.size());
     for (const TextureData& t : data.textures)
     {
+        if (!t.cacheKey.empty())
+            if (auto it = textureCache.find(t.cacheKey); it != textureCache.end())
+            {
+                textures.push_back(it->second);
+                continue;
+            }
+
         if (t.mips.empty() || t.width == 0 || t.height == 0)
         {
             textures.push_back(renderer.white_texture());
             continue;
         }
-        textures.push_back(
-            renderer.create_texture({int(t.width), int(t.height), t.mips[0], gl_format(t.format), t.srgb}));
+
+        const TextureHandle h =
+            renderer.create_texture({int(t.width), int(t.height), t.mips[0], gl_format(t.format), t.srgb});
+        if (!t.cacheKey.empty())
+            textureCache.emplace(t.cacheKey, h);
+        textures.push_back(h);
     }
 
     ModelAsset asset;

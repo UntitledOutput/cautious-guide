@@ -7,7 +7,7 @@ struct FreeCam
 {
     math::vec3 position{0.0f, 1.0f, 4.0f};
     float yaw = 0.0f, pitch = 0.0f;
-    float speed = 5.0f;
+    float speed = 50.0f;
     float sensitivity = 0.002f;
     bool enabled = true;
 

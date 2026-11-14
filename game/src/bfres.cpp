@@ -6,49 +6,214 @@
 #include "loaders/bfres/sarc.hpp"
 #include "loaders/bfres/gx2.hpp"
 
+#include <unordered_set>
+
 using bfrs = BfresFile;
+
+// ps. a lot of this code is copied from Syroot, KillzGaming, etc. also nintendo lol
+
+float half_to_float(u16 h)
+{
+    const u32 sign = u32(h & 0x8000) << 16;
+    u32 exp = (h >> 10) & 0x1F;
+    u32 mant = h & 0x3FF;
+
+    u32 bits;
+    if (exp == 0)
+    {
+        if (mant == 0)
+            bits = sign;
+        else
+        {
+            exp = 127 - 15 + 1;
+            while (!(mant & 0x400))
+            {
+                mant <<= 1;
+                --exp;
+            }
+            mant &= 0x3FF;
+            bits = sign | (exp << 23) | (mant << 13);
+        }
+    }
+    else if (exp == 31)
+        bits = sign | 0x7F800000 | (mant << 13);
+    else
+        bits = sign | ((exp + 127 - 15) << 23) | (mant << 13);
+
+    float f;
+    std::memcpy(&f, &bits, 4);
+    return f;
+}
+
+
+float packed_ufloat(u32 v, u32 mantBits)
+{
+    const u32 exp = v >> mantBits;
+    const u32 mant = v & ((1u << mantBits) - 1);
+    if (exp == 0)
+        return std::ldexp(float(mant) / float(1u << mantBits), -14);
+    if (exp == 31)
+        return mant ? NAN : INFINITY;
+    return std::ldexp(1.0f + float(mant) / float(1u << mantBits), int(exp) - 15);
+}
 
 math::vec4 decode_attribute(filesys::ByteReader& r, BfresFile::FvtxVertexBuffer::FvtxVertexAttributeFormat format)
 {
-    switch (u32(format))
+    const u32 f = u32(format);
+    const u32 layout = f & 0xFF;
+    const u32 kind = f >> 8;
+
+    if (kind != 0x0 && kind != 0x1 && kind != 0x2 && kind != 0x3 && kind != 0x8 && kind != 0xA)
+        throw_error("unsupported vertex attribute format " + std::to_string(f));
+
+    const bool isSigned = kind == 0x2 || kind == 0x3 || kind == 0xA;
+    const bool normalized = kind == 0x0 || kind == 0x2;
+
+    float out[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+
+    // turns a raw integer of `bits` width into the final value for this kind
+    auto convert = [&](u32 raw, u32 bits) -> float
     {
-        case 0x811:
-            return {r.read<float>(), r.read<float>(), r.read<float>(), 1.0f};
-        case 0x80D:
-            return {r.read<float>(), r.read<float>(), 0.0f, 1.0f};
-        case 0x007:
-            return {r.read<u16>() / 65535.0f, r.read<u16>() / 65535.0f, 0.0f, 1.0f};
-        case 0x004:
-            return {r.read<u8>() / 255.0f, r.read<u8>() / 255.0f, 0.0f, 0.0f};
-        case 0x00A:
-            return {r.read<u8>() / 255.0f, r.read<u8>() / 255.0f, r.read<u8>() / 255.0f, r.read<u8>() / 255.0f};
-        case 0x104:
-            return {float(r.read<u8>()), float(r.read<u8>()), 0.0f, 0.0f};
-        case 0x10A:
-            return {float(r.read<u8>()), float(r.read<u8>()), float(r.read<u8>()), float(r.read<u8>())};
-        case 0x20A:
+        if (isSigned)
+        {
+            int64_t v = raw;
+            if (raw & (1ull << (bits - 1)))
+                v -= int64_t(1ull << bits);
+            if (!normalized)
+                return float(v);
+            return std::max(float(v) / float((1ull << (bits - 1)) - 1), -1.0f);
+        }
+        if (!normalized)
+            return float(raw);
+        return float(raw) / float((1ull << bits) - 1);
+    };
+
+    // packed layouts
+    switch (layout)
+    {
+        case 0x01: // 4_4
             {
-                auto s = [&] { return std::max(float(r.read<int8_t>()) / 127.0f, -1.0f); };
-                return {s(), s(), s(), s()};
+                const u32 v = r.read<u8>();
+                out[0] = convert(v & 0xF, 4);
+                out[1] = convert(v >> 4, 4);
+                return {out[0], out[1], out[2], out[3]};
             }
-        case 0x20B:
+        case 0x09: // 10_11_11 float
             {
                 const u32 v = r.read<u32>();
-                auto s = [&](int shift)
-                {
-                    int x = int((v >> shift) & 0x3FF);
-                    if (x & 0x200)
-                        x -= 0x400;
-                    return float(x) / 511.0f;
-                };
-                return {s(0), s(10), s(20), 0.0f};
+                out[0] = packed_ufloat(v & 0x7FF, 6);
+                out[1] = packed_ufloat((v >> 11) & 0x7FF, 6);
+                out[2] = packed_ufloat(v >> 22, 5);
+                return {out[0], out[1], out[2], out[3]};
             }
-        case 0x207:
-            return {std::max(float(r.read<int16_t>()) / 32767.0f, -1.0f),
-                    std::max(float(r.read<int16_t>()) / 32767.0f, -1.0f), 0.0f, 1.0f};
-        default:
-            throw_error("unsupported vertex attribute format " + std::to_string(u32(format)));
+        case 0x0B: // 10_10_10_2
+            {
+                const u32 v = r.read<u32>();
+                out[0] = convert(v & 0x3FF, 10);
+                out[1] = convert((v >> 10) & 0x3FF, 10);
+                out[2] = convert((v >> 20) & 0x3FF, 10);
+                out[3] = convert(v >> 30, 2);
+                return {out[0], out[1], out[2], out[3]};
+            }
     }
+
+    // plain layouts: component count, bits per component, and whether the bits are a float
+    u32 count, bits;
+    bool isFloat = false;
+    switch (layout)
+    {
+        case 0x00:
+            count = 1;
+            bits = 8;
+            break;
+        case 0x02:
+            count = 1;
+            bits = 16;
+            break;
+        case 0x03:
+            count = 1;
+            bits = 16;
+            isFloat = true;
+            break;
+        case 0x04:
+            count = 2;
+            bits = 8;
+            break;
+        case 0x05:
+            count = 1;
+            bits = 32;
+            break;
+        case 0x06:
+            count = 1;
+            bits = 32;
+            isFloat = true;
+            break;
+        case 0x07:
+            count = 2;
+            bits = 16;
+            break;
+        case 0x08:
+            count = 2;
+            bits = 16;
+            isFloat = true;
+            break;
+        case 0x0A:
+            count = 4;
+            bits = 8;
+            break;
+        case 0x0C:
+            count = 2;
+            bits = 32;
+            break;
+        case 0x0D:
+            count = 2;
+            bits = 32;
+            isFloat = true;
+            break;
+        case 0x0E:
+            count = 4;
+            bits = 16;
+            break;
+        case 0x0F:
+            count = 4;
+            bits = 16;
+            isFloat = true;
+            break;
+        case 0x10:
+            count = 3;
+            bits = 32;
+            break;
+        case 0x11:
+            count = 3;
+            bits = 32;
+            isFloat = true;
+            break;
+        case 0x12:
+            count = 4;
+            bits = 32;
+            break;
+        case 0x13:
+            count = 4;
+            bits = 32;
+            isFloat = true;
+            break;
+        default:
+            throw_error("unsupported vertex attribute format " + std::to_string(f));
+    }
+
+    for (u32 i = 0; i < count; ++i)
+    {
+        if (isFloat)
+            out[i] = bits == 16 ? half_to_float(r.read<u16>()) : r.read<float>();
+        else if (bits == 8)
+            out[i] = convert(r.read<u8>(), 8);
+        else if (bits == 16)
+            out[i] = convert(r.read<u16>(), 16);
+        else
+            out[i] = convert(r.read<u32>(), 32);
+    }
+
+    return {out[0], out[1], out[2], out[3]};
 }
 
 template <typename T>
@@ -236,7 +401,7 @@ std::vector<byte> yaz0_decompress(std::span<const byte> src)
     return out;
 }
 
-void* SARCFileOperator::onFileBytes(byte* data, int dataSize)
+std::unique_ptr<SarcArchive> SARCFileOperator::loadFilePtr(byte* data, int dataSize)
 {
     const std::span<const byte> src{data, size_t(dataSize)};
     auto archive = std::make_unique<SarcArchive>();
@@ -248,8 +413,25 @@ void* SARCFileOperator::onFileBytes(byte* data, int dataSize)
 
     archive->files = sarc_read(archive->storage);
     for (auto& file : archive->files)
-        if (std::filesystem::path(file.name).extension() == ".bfres")
+    {
+        var extension = std::filesystem::path(file.name).extension();
+        if (extension == ".bfres")
+        {
             file.bfres = load_bfres(file.data);
+        }
+        else if (extension == ".szs")
+        {
+            // root back into sarc, recursively
+            file.archive = loadFilePtr(const_cast<byte*>(file.data.data()), file.data.size());
+        }
+    }
+
+    return archive;
+}
+
+void* SARCFileOperator::onFileBytes(byte* data, int dataSize)
+{
+    auto archive = loadFilePtr(data, dataSize);
 
     return archive.release();
 }
@@ -942,6 +1124,8 @@ graphics::ModelData parse_model(bfrs::FMDL& mdl,BfresModel& model)
         data.meshes.push_back(std::move(mesh));
     }
 
+    
+    std::unordered_map<std::string, u32> localTextures;
     for (const bfrs::FMAT& material : mdl.materials)
     {
         graphics::MaterialData m;
@@ -949,8 +1133,6 @@ graphics::ModelData parse_model(bfrs::FMDL& mdl,BfresModel& model)
         m.shader = material.shaderControl.vertexShaderName + "_" +
                    material.shaderControl.fragmentShaderName;
 
-
-        std::unordered_map<std::string, u32> localTextures;
         const size_t pairs = std::min(material.textureSelectors.size(), material.textureAttributeSelectors.size());
         for (size_t i = 0; i < pairs; ++i)
         {
@@ -1025,6 +1207,7 @@ graphics::TextureData parse_texture(bfrs::FTEX& tex)
     data.format = graphics::TextureFormat::RGBA8;
     data.srgb = (u32(tex.format) & 0x400) != 0;
     data.mips.push_back(gx2::decode_rgba8(s.format, tex.width, tex.height, gx2::deswizzle(s, tex.data)));
+    data.cacheKey = tex.name;
     return data;
 }
 
@@ -1319,14 +1502,24 @@ graphics::AnimationData parse_skeletal_animation(const bfrs::FSKA& fska, const b
     return anim;
 } 
 
-BfresModel BfresFile::parse()
+BfresModel BfresFile::parse(BfresFile* baseFile)
 {
     BfresModel model{};
 
-    for (auto& texture : textures)
-        model.textures.push_back(parse_texture(texture));
+    var models = baseFile ? baseFile->models : this->models;
+    var textures = baseFile ? baseFile->textures : this->textures;
 
-        std::vector<std::vector<graphics::AnimationData>> animsPerModel(models.size());
+    std::unordered_set<std::string> used;
+    for (const auto& m : models)
+        for (const auto& mat : m.materials)
+            for (const auto& sel : mat.textureSelectors)
+                used.insert(sel.name);
+
+    for (auto& texture : textures)
+        if (used.count(texture.name))
+            model.textures.push_back(parse_texture(texture));
+
+    std::vector<std::vector<graphics::AnimationData>> animsPerModel(models.size());
     for (const auto& fska : skeletalAnims)
     {
         size_t best = SIZE_MAX, bestMatches = 0;
@@ -1360,9 +1553,6 @@ BfresModel BfresFile::parse()
         data.animations = std::move(animsPerModel[m]);
         model.models.push_back(std::move(data));
     }
-
-    for (auto& value : models)
-        model.models.push_back(parse_model(value, model));
 
     return model;
 }

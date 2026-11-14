@@ -14,6 +14,7 @@
 #include "graphics/model.hpp"
 #include "reader.hpp"
 
+struct SarcArchive;
 class Engine;
 
 struct BfresModel
@@ -614,7 +615,7 @@ struct BfresFile
     std::vector<FSKA> skeletalAnims;
     ;
 
-    BfresModel parse();
+    BfresModel parse(BfresFile* baseFile = nullptr);
 };
 
 struct SarcFile
@@ -622,6 +623,7 @@ struct SarcFile
     std::string name;
     std::span<const byte> data;
     std::unique_ptr<BfresFile> bfres;
+    std::unique_ptr<SarcArchive> archive;
 };
 
 struct SarcArchive
