@@ -38,7 +38,9 @@ void SplatGame::on_init(Engine& engine)
     if (!entry || !entry->bfres)
         throw_error("Npc_Judge.szs has no Output.bfres");
 
-    model = engine.models().generate(entry->bfres->models[0].name, entry->bfres->models[0].parse());
+    const BfresModel bfresModel = entry->bfres->parse();
+
+    model = engine.models().generate(entry->bfres->models[0].name, bfresModel.models[0]);
     var e = scene::spawn_model(engine.world(), model);
     engine.world().add<Animator>(e);
     engine.world().add<Pose>(e);

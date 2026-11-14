@@ -12,6 +12,6 @@ uniform sampler2D _a0;
 void main()
 {
     float light = max(dot(normalize(vNormal), normalize(vec3(0.4, 1.0, 0.3))), 0.0) * 0.8 + 0.2;
-    vec4 albedo = texture(_a0, vUV) * baseColor;
+    vec4 albedo = texture(_a0, vUV);
     FragColor = vec4(albedo.rgb * light, albedo.a);
 }

@@ -3,6 +3,7 @@
 #include "loaders/bfres/bfres.hpp"
 
 #include "graphics/model.hpp"
+#include "loaders/bfres/sarc.hpp"
 
 using bfrs = BfresFile;
 
@@ -41,6 +42,9 @@ math::vec4 decode_attribute(filesys::ByteReader& r, BfresFile::FvtxVertexBuffer:
                 };
                 return {s(0), s(10), s(20), 0.0f};
             }
+        case 0x207:
+            return {std::max(float(r.read<int16_t>()) / 32767.0f, -1.0f),
+                    std::max(float(r.read<int16_t>()) / 32767.0f, -1.0f), 0.0f, 1.0f};
         default:
             throw_error("unsupported vertex attribute format " + std::to_string(u32(format)));
     }
@@ -276,7 +280,8 @@ BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
 
         bone.scale = r.read_vec3();
         const math::vec4 rot = r.read_vec4();
-        bone.rotation = (flags & 0x7000) == 0x1000 ? math::from_euler({rot.x, rot.y, rot.z})
+        bone.rotation = (flags & 0x7000) == 0x1000 ? math::angle_axis(rot.z, {0, 0, 1}) *
+                math::angle_axis(rot.y, {0, 1, 0}) * math::angle_axis(rot.x, {1, 0, 0})
                                                    : math::quat{rot.x, rot.y, rot.z, rot.w};
         bone.position = r.read_vec3();
 
@@ -303,6 +308,10 @@ BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
             throw_error("fskl: inverse index out of range");
         fskl.bones[inverseIndexArray[i]].inverseMatrix = inverseMatrices[i];
     }
+
+    fskl.matrixToBone = inverseIndexArray;
+    fskl.matrixToBone.insert(fskl.matrixToBone.end(), extraIndexArray.begin(), extraIndexArray.end());
+    fskl.inverseMatrices = std::move(inverseMatrices);
 
 
     return fskl;
@@ -790,13 +799,13 @@ BfresFile::FMDL load_model(filesys::ByteReader& r)
     return fmdl;
 }
 
-graphics::ModelData BfresFile::FMDL::parse()
+graphics::ModelData parse_model(bfrs::FMDL& mdl,BfresModel& model)
 {
     graphics::ModelData data;
 
-    for (size_t i = 0; i < skeleton.bones.size(); ++i)
+    for (size_t i = 0; i < mdl.skeleton.bones.size(); ++i)
     {
-        const auto& bone = skeleton.bones[i];
+        const auto& bone = mdl.skeleton.bones[i];
         graphics::NodeData node;
         node.name = bone.name;
         node.parent = bone.parentIndex == 0xFFFF ? -1 : int(bone.parentIndex);
@@ -809,15 +818,15 @@ graphics::ModelData BfresFile::FMDL::parse()
     }
 
     graphics::SkinData skin;
-    for (size_t i = 0; i < skeleton.matrixToBone.size(); ++i)
+    for (size_t i = 0; i < mdl.skeleton.matrixToBone.size(); ++i)
     {
-        const u16 b = skeleton.matrixToBone[i];
-        if (b >= skeleton.bones.size())
+        const u16 b = mdl.skeleton.matrixToBone[i];
+        if (b >= mdl.skeleton.bones.size())
             throw_error("fskl: matrix references a missing bone");
         skin.joints.push_back(b);
-        // rigid entries come after the smooth ones, their vertices are already in bone space
-        skin.inverseBind.push_back(i < skeleton.inverseMatrices.size() ? skeleton.inverseMatrices[i]
-                                                                       : math::mat4::identity());
+        skin.inverseBind.push_back(i < mdl.skeleton.inverseMatrices.size()
+                                       ? mdl.skeleton.inverseMatrices[i]
+                                       : math::mat4::identity());
     }
     data.skins.push_back(std::move(skin));
 
@@ -827,14 +836,14 @@ graphics::ModelData BfresFile::FMDL::parse()
     skinned.skin = 0;
     data.nodes.push_back(std::move(skinned));
 
-    for (const FSHP& shape : shapes)
+    for (const bfrs::FSHP& shape : mdl.shapes)
     {
         if (shape.lodModels.empty() || shape.lodModels[0].indexBuffer.data.empty())
             throw_error("fshp: no index data");
-        if (shape.vertexBufferIndex >= vertexBuffers.size())
+        if (shape.vertexBufferIndex >= mdl.vertexBuffers.size())
             throw_error("fshp: vertex buffer index out of range");
 
-        const auto& vb = vertexBuffers[shape.vertexBufferIndex];
+        const auto& vb = mdl.vertexBuffers[shape.vertexBufferIndex];
         graphics::MeshData mesh;
         mesh.name = shape.name;
         mesh.indices = shape.lodModels[0].indexBuffer.data;
@@ -849,7 +858,7 @@ graphics::ModelData BfresFile::FMDL::parse()
 
         if (shape.vertexSkinCount == 0)
         {
-            if (shape.boneIndex >= skeleton.bones.size())
+            if (shape.boneIndex >= mdl.skeleton.bones.size())
                 throw_error("fshp: bone index out of range");
             data.nodes[shape.boneIndex].meshes.push_back(meshIndex);
         }
@@ -862,7 +871,6 @@ graphics::ModelData BfresFile::FMDL::parse()
             if (mesh.weights.empty())
                 mesh.weights.assign(mesh.positions.size(), {1.0f, 0.0f, 0.0f, 0.0f});
 
-            // only the first skinCount slots are meaningful
             const u32 k = shape.vertexSkinCount;
             for (size_t v = 0; v < mesh.joints.size(); ++v)
             {
@@ -891,14 +899,97 @@ graphics::ModelData BfresFile::FMDL::parse()
         data.meshes.push_back(std::move(mesh));
     }
 
-    for (const FMAT& material : materials)
+    for (const bfrs::FMAT& material : mdl.materials)
     {
         graphics::MaterialData m;
         m.name = material.name;
-        m.shader = material.shaderControl.vertexShaderName + "_" + material.shaderControl.fragmentShaderName;
+        m.shader = material.shaderControl.vertexShaderName + "_" +
+                   material.shaderControl.fragmentShaderName;
+
+
+        std::unordered_map<std::string, u32> localTextures;
+        const size_t pairs = std::min(material.textureSelectors.size(), material.textureAttributeSelectors.size());
+        for (size_t i = 0; i < pairs; ++i)
+        {
+            const std::string& texName = material.textureSelectors[i].name;
+            auto it = localTextures.find(texName);
+            if (it == localTextures.end())
+            {
+                auto found = std::find_if(model.textures.begin(), model.textures.end(),
+                                          [&](const graphics::TextureData& t) { return t.name == texName; });
+                if (found == model.textures.end() || found->mips.empty())
+                    continue; // not decoded yet, white fallback
+                it = localTextures.emplace(texName, u32(data.textures.size())).first;
+                data.textures.push_back(*found);
+            }
+            m.textures[material.textureAttributeSelectors[i].name] = it->second;
+        }
+
         data.materials.push_back(std::move(m));
     }
+
     return data;
+}
+
+bfrs::FTEX load_texture(filesys::ByteReader& r)
+{
+    bfrs::FTEX tex {};
+
+    if (!r.magic("FTEX"))
+        throw_error("not ftex");
+
+    tex.dimension = (BfresFile::SurfaceDim)r.read<u32>();
+    tex.width = r.read<u32>();
+    tex.height = r.read<u32>();
+    tex.depth = r.read<u32>();
+
+    tex.mipmapCount = r.read<u32>();
+    tex.format = (bfrs::SurfaceFormat)r.read<u32>();
+    tex.antiAliasMode = (bfrs::AntiAliasMode)r.read<u32>();
+    tex.usage = (bfrs::SurfaceUse)r.read<u32>();
+
+    var dataLength = r.read<u32>();
+    r.read<u32>();
+    var mipMapSize = r.read<u32>();
+    r.read<u32>();
+
+    tex.tileMode = (bfrs::TileMode)r.read<u32>();
+    tex.swizzle = r.read<u32>();
+    tex.alignment = r.read<u32>();
+    tex.pitch = r.read<u32>();
+
+    r.read_array<byte>(0x6C);
+    var dataOffset = r.read_rel_offset();
+    var mipMapOffset = r.read_rel_offset();
+
+    tex.data = r.slice(dataOffset, dataLength);
+// note: maybe mipmaps soon
+
+    return tex;
+}
+
+graphics::TextureData parse_texture(bfrs::FTEX& tex)
+{
+    graphics::TextureData data;
+    data.width = tex.width;
+    data.height = tex.height;
+
+
+
+    return data;
+}
+  
+BfresModel BfresFile::parse()
+{
+    BfresModel model {};
+
+    for (auto& texture : textures)
+        model.textures.push_back(parse_texture(texture));
+
+    for (auto& value : models)
+        model.models.push_back(parse_model(value,model));
+
+    return model;
 }
 
 std::unique_ptr<BfresFile> load_bfres(std::span<const byte> data)
@@ -941,6 +1032,13 @@ std::unique_ptr<BfresFile> load_bfres(std::span<const byte> data)
         bfres->models[i] = load_model(r);
     }
 
+    bfres->textures.resize(dictionaries[1].nodes.size());
+    for (int i = 0; i < dictionaries[1].nodes.size(); ++i)
+    {
+        r.seek(dictionaries[1].nodes[i].dataOffset);
+        bfres->textures[i] = load_texture(r);
+        bfres->textures[i].name = dictionaries[1].nodes[i].name;
+    }
 
     return bfres;
 }

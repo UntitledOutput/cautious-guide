@@ -16,6 +16,12 @@
 
 class Engine;
 
+struct BfresModel
+{
+    std::vector<graphics::ModelData> models;
+    std::vector<graphics::TextureData> textures;
+};
+
 struct BfresFile
 {
     struct DictionaryNode
@@ -47,6 +53,8 @@ struct BfresFile
         };
 
         std::vector<FsklBone> bones;
+        std::vector<u16> matrixToBone;
+        std::vector<math::mat4> inverseMatrices;
     };
 
     struct FvtxVertexBuffer
@@ -282,10 +290,202 @@ struct BfresFile
         std::vector<FMAT> materials;
         std::vector<FSHP> shapes;
 
-        graphics::ModelData parse();
+    };
+
+    enum SurfaceFormat : int
+    {
+        Invalid = 0x00000000,
+        TC_R8_UNorm = 0x00000001,
+        TC_R8_UInt = 0x00000101,
+        TC_R8_SNorm = 0x00000201,
+        TC_R8_SInt = 0x00000301,
+        T_R4_G4_UNorm = 0x00000002,
+        TCD_R16_UNorm = 0x00000005,
+        TC_R16_UInt = 0x00000105,
+        TC_R16_SNorm = 0x00000205,
+        TC_R16_SInt = 0x00000305,
+        TC_R16_Float = 0x00000806,
+        TC_R8_G8_UNorm = 0x00000007,
+        TC_R8_G8_UInt = 0x00000107,
+        TC_R8_G8_SNorm = 0x00000207,
+        TC_R8_G8_SInt = 0x00000307,
+        TCS_R5_G6_B5_UNorm = 0x00000008,
+        TC_R5_G5_B5_A1_UNorm = 0x0000000A,
+        TC_R4_G4_B4_A4_UNorm = 0x0000000B,
+        TC_A1_B5_G5_R5_UNorm = 0x0000000C,
+        TC_R32_UInt = 0x0000010D,
+        TC_R32_SInt = 0x0000030D,
+        TCD_R32_Float = 0x0000080E,
+        TC_R16_G16_UNorm = 0x0000000F,
+        TC_R16_G16_UInt = 0x0000010F,
+        TC_R16_G16_SNorm = 0x0000020F,
+        TC_R16_G16_SInt = 0x0000030F,
+        TC_R16_G16_Float = 0x00000810,
+        D_D24_S8_UNorm = 0x00000011,
+        T_R24_UNorm_X8 = 0x00000011,
+        T_X24_G8_UInt = 0x00000111,
+        D_D24_S8_Float = 0x00000811,
+        TC_R11_G11_B10_Float = 0x00000816,
+        TCS_R10_G10_B10_A2_UNorm = 0x00000019,
+        TC_R10_G10_B10_A2_UInt = 0x00000119,
+        TC_R10_G10_B10_A2_SNorm = 0x00000219,
+        TC_R10_G10_B10_A2_SInt = 0x00000319,
+        TCS_R8_G8_B8_A8_UNorm = 0x0000001A,
+        TC_R8_G8_B8_A8_UInt = 0x0000011A,
+        TC_R8_G8_B8_A8_SNorm = 0x0000021A,
+        TC_R8_G8_B8_A8_SInt = 0x0000031A,
+        TCS_R8_G8_B8_A8_SRGB = 0x0000041A,
+        TCS_A2_B10_G10_R10_UNorm = 0x0000001B,
+        TC_A2_B10_G10_R10_UInt = 0x0000011B,
+        D_D32_Float_S8_UInt_X24 = 0x0000081C,
+        T_R32_Float_X8_X24 = 0x0000081C,
+        T_X32_G8_UInt_X24 = 0x0000011C,
+        TC_R32_G32_UInt = 0x0000011D,
+        TC_R32_G32_SInt = 0x0000031D,
+        TC_R32_G32_Float = 0x0000081E,
+        TC_R16_G16_B16_A16_UNorm = 0x0000001F,
+        TC_R16_G16_B16_A16_UInt = 0x0000011F,
+        TC_R16_G16_B16_A16_SNorm = 0x0000021F,
+        TC_R16_G16_B16_A16_SInt = 0x0000031F,
+        TC_R16_G16_B16_A16_Float = 0x00000820,
+        TC_R32_G32_B32_A32_UInt = 0x00000122,
+        TC_R32_G32_B32_A32_SInt = 0x00000322,
+        TC_R32_G32_B32_A32_Float = 0x00000823,
+        T_BC1_UNorm = 0x00000031,
+        T_BC1_SRGB = 0x00000431,
+        T_BC2_UNorm = 0x00000032,
+        T_BC2_SRGB = 0x00000432,
+        T_BC3_UNorm = 0x00000033,
+        T_BC3_SRGB = 0x00000433,
+        T_BC4_UNorm = 0x00000034,
+        T_BC4_SNorm = 0x00000234,
+        T_BC5_UNorm = 0x00000035,
+        T_BC5_SNorm = 0x00000235,
+        T_NV12_UNorm = 0x00000081
+    };
+
+    /// <summary>
+    /// Indicates the desired tiling mode for a surface. You should use only <see cref="Default"/> in most cases. Don't
+    /// use other modes unless you know what you're doing!
+    /// </summary>
+    /// <remarks>Native type: GX2TileMode</remarks>
+    enum class TileMode : int
+    {
+        /// <summary>
+        /// Driver will choose best mode.
+        /// </summary>
+        Default = 0x00000000,
+
+        /// <summary>
+        /// Typically not supported by HW.
+        /// </summary>
+        LinearSpecial = 0x00000010,
+
+        /// <summary>
+        /// Supported by HW, but not fast.
+        /// </summary>
+        LinearAligned = 0x00000001,
+        OneDTiledThin1 = 0x00000002,
+        OneDTiledThick = 0x00000003,
+
+        /// <summary>
+        /// (A typical default, but not always.)
+        /// </summary>
+        TwoDTiledThin1 = 0x00000004,
+        TwoDTiledThin2 = 0x00000005,
+        TwoDTiledThin4 = 0x00000006,
+        TwoDTiledThick = 0x00000007,
+        TwoBTiledThin1 = 0x00000008,
+        TwoBTiledThin2 = 0x00000009,
+        TwoBTiledThin4 = 0x0000000A,
+        TwoBTiledThick = 0x0000000B,
+        ThreeDTiledThin1 = 0x0000000C,
+        ThreeDTiledThick = 0x0000000D,
+        ThreeBTiledThin1 = 0x0000000E,
+        ThreeBTiledThick = 0x0000000F,
+    };
+
+    /// <summary>
+    /// Indicates how a given surface may be used.
+    /// A &quot;final&quot; TV render target is one that will be copied to a TV scan buffer. It needs to be designed to
+    /// handle certain display corner cases. (When a HD surface must be scaled down to display in NTSC/PAL.)
+    /// </summary>
+    /// <remarks>Native type: GX2SurfaceUse</remarks>
+    enum class SurfaceUse : int
+    {
+        Texture = 1 << 0,
+        ColorBuffer = 1 << 1,
+        DepthBuffer = 1 << 2,
+
+        /// <summary>
+        /// Internal use only.
+        /// </summary>
+        ScanBuffer = 1 << 4,
+
+        /// <summary>
+        /// Modifier, designates a final TV render target.
+        /// </summary>
+        Ftv = 1 << 31,
+
+        ColorBufferTexture = ColorBuffer | Texture,
+        DepthBufferTexture = DepthBuffer | Texture,
+
+        ColorBufferFtv = ColorBuffer | Ftv,
+        ColorBufferTextureFtv = ColorBufferTexture | Ftv
+    };
+
+    /// <summary>
+    /// Indicates the &quot;shape&quot; of a given surface or texture.
+    /// </summary>
+    /// <remarks>Native type: GX2SurfaceDim</remarks>
+    enum class SurfaceDim : int
+    {
+        OneDimensional = 0,
+        TwoDimensional = 1,
+        ThreeDimensional = 2,
+        Cube = 3,
+        OneDimensionalArray = 4,
+        TwoDimensionalArray = 5,
+        TwoDimensionalMsaa = 6,
+        TwoDimensionalMsaaArray = 7
+    };
+
+    /// <summary>
+    /// Indicates the AA mode (number of samples) for a surface.
+    /// </summary>
+    /// <remarks>Native type: GX2AAMode</remarks>
+    enum class AntiAliasMode : int
+    {
+        OneSample = 0,
+        TwoSamples = 1,
+        FourSamples = 2,
+        EightSamples = 3
+    };
+
+    struct FTEX
+    {
+        std::string name;
+
+        u32 width, height, depth;
+        u32 mipmapCount;
+
+        SurfaceDim dimension;
+        SurfaceFormat format;
+        AntiAliasMode antiAliasMode;
+        SurfaceUse usage;
+
+        TileMode tileMode;
+        u32 swizzle;
+        u32 alignment;
+        u32 pitch;
+
+        std::span<const byte> data;
     };
 
     std::vector<FMDL> models;
+    std::vector<FTEX> textures;
+
+    BfresModel parse();
 };
 
 struct SarcFile
