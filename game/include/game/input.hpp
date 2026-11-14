@@ -5,7 +5,7 @@ using namespace input;
 
 struct SplatActions
 {
-    ActionId shoot, jump, swim, sub, special, map, move;
+    ActionId shoot, jump, swim, sub, special, map, move, look;
 
     void register_with(ActionMap& m)
     {
@@ -16,6 +16,7 @@ struct SplatActions
         special = m.add("special", ActionKind::Button);
         map = m.add("map", ActionKind::Button);
         move = m.add("move", ActionKind::Axis2D);
+        look = m.add("look", ActionKind::Axis2D);
     }
 
     void default_bindings(ActionMap& m)
@@ -25,8 +26,16 @@ struct SplatActions
         m.bind(move, {S::Key, SDL_SCANCODE_A, -1.0f, 0});
         m.bind(move, {S::Key, SDL_SCANCODE_W, 1.0f, 1});
         m.bind(move, {S::Key, SDL_SCANCODE_S, -1.0f, 1});
+
+        m.bind(move, {S::Key, SDL_SCANCODE_RIGHT, 1.0f, 0});
+        m.bind(move, {S::Key, SDL_SCANCODE_LEFT, -1.0f, 0});
+        m.bind(move, {S::Key, SDL_SCANCODE_UP, 1.0f, 1});
+        m.bind(move, {S::Key, SDL_SCANCODE_DOWN, -1.0f, 1});
+
         m.bind(move, {S::PadAxis, SDL_CONTROLLER_AXIS_LEFTX, 1.0f, 0});
         m.bind(move, {S::PadAxis, SDL_CONTROLLER_AXIS_LEFTY, -1.0f, 1});
+        m.bind(look, {S::PadAxis, SDL_CONTROLLER_AXIS_RIGHTX, 1.0f, 0});
+        m.bind(look, {S::PadAxis, SDL_CONTROLLER_AXIS_RIGHTY, -1.0f, 1});
 
         m.bind(shoot, {S::MouseButton, SDL_BUTTON_LEFT});
         m.bind(shoot, {S::PadAxis, SDL_CONTROLLER_AXIS_TRIGGERRIGHT});

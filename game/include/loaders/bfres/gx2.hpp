@@ -1,7 +1,6 @@
 #pragma once
 #include "core/util.hpp"
 
-#include <cmath>
 #include <span>
 #include <vector>
 

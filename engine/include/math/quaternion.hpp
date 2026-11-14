@@ -53,4 +53,12 @@ quat from_mat4(const mat4& m);
 quat from_euler(vec3 radians);
 vec3 to_euler(quat q);
 
+inline float radians(float deg)
+{ return deg * 0.017453292519943295f; } 
+
+inline float degrees(float rad)
+{
+    return rad * 57.29577951308232f;
+}
+
 } // namespace math

@@ -2,6 +2,8 @@ find_package(SDL2 CONFIG REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(Stb REQUIRED)
 find_path(TINYGLTF_INCLUDE_DIRS "tiny_gltf.h")
+find_package(imgui CONFIG REQUIRED)
+find_package(unofficial-enet CONFIG REQUIRED)
 
 file(GLOB_RECURSE ENGINE_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
@@ -20,21 +22,34 @@ target_include_directories(engine
     ${OPENGL_INCLUDE_DIR}
     ${STB_INCLUDE_DIRS}
     ${TINYGLTF_INCLUDE_DIRS}
+    ${IMGUI_INCLUDE_DIRS}
     include # path to glad.h and khrplatform.h
 )
 
-target_link_libraries(engine PRIVATE OpenGL::GL)
+target_link_libraries(engine PRIVATE
+    OpenGL::GL
+    unofficial::enet::enet
+)
 
 # render.hpp includes glad, so anything including engine headers needs it too
-target_link_libraries(engine PUBLIC glad)
+target_link_libraries(engine PUBLIC glad imgui_sdl2)
 
+if(WIN32)
+    target_link_libraries(engine PUBLIC ws2_32 winmm)
+endif()
 
 target_link_libraries(engine PUBLIC
     $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
     $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
+    imgui::imgui
 )
 
 target_compile_features(engine PUBLIC cxx_std_20)
+
+target_compile_definitions(engine PRIVATE
+    TINYGLTF_NO_STB_IMAGE
+    TINYGLTF_NO_STB_IMAGE_WRITE
+)
 
 target_compile_options(engine PRIVATE
     $<$<CXX_COMPILER_ID:MSVC>:/W4>

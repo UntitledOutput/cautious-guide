@@ -1,5 +1,4 @@
 #include "engine.hpp"
-#include "engine.hpp"
 #include <SDL.h>
 #include <algorithm>
 #include <glad/glad.h>
@@ -36,7 +35,7 @@ Engine::Engine(EngineConfiguration cfg) : _cfg(std::move(cfg)), _window(std::mak
     _models = std::make_unique<graphics::ModelCache>(*_renderMgr, *_filesystem);
     _models->add_loader(graphics::make_gltf_loader());
 
-    _world = std::make_unique<ecs::World>();
+    regen_world();
 }
 
 Engine::~Engine() = default;
@@ -81,6 +80,17 @@ int Engine::start(GameCtrl& game)
 
     game.on_shutdown(*this);
     return 0;
+}
+
+void Engine::regen_world()
+{
+    if (_world)
+    {
+        // clear world memory
+        _world = nullptr;
+    }
+
+    _world = std::make_unique<ecs::World>();
 }
 
 Engine::SDLContext::SDLContext()

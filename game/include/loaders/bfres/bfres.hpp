@@ -1,6 +1,6 @@
 #pragma once
 #include "core/file.hpp"
-#include "engine.hpp"
+#include "loaders/bfres/sarc.hpp"
 
 class SARCFileOperator : public filesys::FileOperator
 {

@@ -3,7 +3,6 @@
 
 
 #include <memory>
-#include <string>
 
 
 #include "core/util.hpp"
@@ -59,8 +58,11 @@ public:
     graphics::ModelCache& models() ret(*_models) 
     ecs::World& world() ret(*_world)
 
+
     int start(GameCtrl& game);
     void quit() { _running = false; }
+
+    void regen_world();
 
     int frame_count() ret(_frame_count);
 

@@ -1,10 +1,6 @@
-#define TINYGLTF_IMPLEMENTATION
-#define TINYGLTF_NO_STB_IMAGE
-#define TINYGLTF_NO_STB_IMAGE_WRITE
-#include <tiny_gltf.h>
-
 #include <cstring>
 #include <numeric>
+#include <tiny_gltf.h>
 #include <unordered_map>
 #include "graphics/image.hpp"
 #include "graphics/model.hpp"

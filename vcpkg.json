@@ -4,6 +4,12 @@
   "dependencies": [
     "sdl2",
     "stb",
-    "tinygltf"
+    "tinygltf",
+    "enet",
+    "doctest",
+    {
+      "name": "imgui",
+      "features": [ "opengl3-binding", "docking-experimental" ]
+    }
   ]
 }

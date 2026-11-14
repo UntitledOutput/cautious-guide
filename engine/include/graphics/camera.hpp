@@ -2,6 +2,8 @@
 #include "math/matrix.hpp"
 #include "math/quaternion.hpp"
 
+class Engine;
+
 namespace graphics
 {
     struct CameraData
@@ -13,5 +15,14 @@ namespace graphics
     };
 
     static_assert(sizeof(CameraData) == 208);
+
+    struct Camera
+    {
+        float fov = 60.0f;
+        float z_near = 0.01f;
+        float z_far = 1000.0f;
+    };
+
+    void update_camera(Engine& engine);
 
 }

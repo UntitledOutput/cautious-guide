@@ -5,7 +5,6 @@
 #include <vector>
 #include <unordered_map>
 #include <span>
-#include <glad/glad.h>
 
 #include "camera.hpp"
 #include "texture.hpp"
@@ -107,6 +106,8 @@ namespace graphics
         TextureHandle normal_texture() ret(normalTexture);
 
         TextureHandle default_texture(std::string_view sampler) const;
+
+        int draw_call_count() ret(drawCalls.size())
 
     private:
         struct FormatPool

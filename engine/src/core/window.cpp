@@ -1,6 +1,9 @@
 #include "core/window.hpp"
 #include <glad/glad.h>
 #include <SDL.h>
+#include <imgui.h>
+#include <imgui_impl_sdl2.h>
+#include <imgui_impl_opengl3.h>
 
 #include "core/input.hpp"
 
@@ -50,6 +53,17 @@ Window::Window(const WindowDescription& desc)
 
     SDL_GL_SetSwapInterval(desc.vsync ? 1 : 0);
     SDL_GL_GetDrawableSize(_window, &fb_width, &fb_height);
+
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    ImGui_ImplSDL2_InitForOpenGL(_window, _context);
+    ImGui_ImplOpenGL3_Init("#version 460");
+
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
+
 }
 
 Window::~Window()
@@ -61,6 +75,7 @@ void Window::poll_events(input::Input& in)
     SDL_Event e;
     while (SDL_PollEvent(&e))
     {
+        ImGui_ImplSDL2_ProcessEvent(&e);
         in.handle_event(e);
 
         switch (e.type)
@@ -84,11 +99,20 @@ void Window::poll_events(input::Input& in)
 
 void Window::swap()
 {
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
     SDL_GL_SwapWindow(_window);
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    ImGui::NewFrame();
 }
 
 void Window::destroy()
 {
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplSDL2_Shutdown();
+    ImGui::DestroyContext();
+
     // context first
     if (_context)
         SDL_GL_DeleteContext(_context);

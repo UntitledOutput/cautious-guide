@@ -2,7 +2,7 @@
 
 #include "engine.hpp"
 #include <SDL.h>
-#include <game.hpp>
+#include <game/game.hpp>
 
 int main(int argc, char* argv[])
 {

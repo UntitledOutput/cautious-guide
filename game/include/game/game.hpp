@@ -1,9 +1,8 @@
 #pragma once
 #include "engine.hpp"
 #include "core/commands.hpp"
-#include "debug/debug.hpp"
 #include "graphics/model.hpp"
-#include "loaders/bfres/sarc.hpp"
+#include "states/state_base.hpp"
 
 struct SplatGame : GameCtrl
 {
@@ -13,16 +12,12 @@ struct SplatGame : GameCtrl
     void on_update(Engine&, double delta) override;
     void on_fixed_update(Engine&, double delta) override;
 
+    void load_new_state(std::unique_ptr<GameState> state);
+
 private:
     ecs::CommandBuffer commandBuffer;
 
-    graphics::MeshHandle mesh;
-    graphics::MaterialHandle mat;
-    graphics::ShaderHandle shader;
-    graphics::TextureHandle tex;
-    graphics::ModelHandle model;
-    std::unique_ptr<SarcArchive> judge;
+    std::unique_ptr<GameState> currentGameState;
+    std::unique_ptr<GameState> cachedGameState;
 
-    FreeCam _freecam;
-    bool f1Held;
 };

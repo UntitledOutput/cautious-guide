@@ -2,6 +2,8 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <glad/glad.h>
+
 #include "core/file.hpp"
 
 using namespace graphics;
@@ -99,6 +101,20 @@ ModelHandle ModelCache::load(const std::string& path)
     return h;
 }
 
+ModelHandle ModelCache::load(std::string key,std::span<const byte> data, std::string ext)
+{
+    if (!resolver)
+        throw_error("set a material resolver before loading models");
+
+    if (auto it = byPath.find(key); it != byPath.end())
+        return it->second;
+
+    assets.push_back(upload(read(data, ext)));
+    const ModelHandle h = ModelHandle(assets.size() - 1);
+    byPath.emplace(key, h);
+    return h;
+}
+
 ModelHandle ModelCache::generate(std::string key,const ModelData& data)
 {
     if (!resolver)
@@ -111,6 +127,14 @@ ModelHandle ModelCache::generate(std::string key,const ModelData& data)
     const ModelHandle h = ModelHandle(assets.size() - 1);
     byPath.emplace(key, h);
     return h;
+}
+
+const ModelHandle ModelCache::find(std::string path)
+{
+    if (auto it = byPath.find(path); it != byPath.end())
+        return it->second;
+
+    throw_error("no model with key " + path);
 }
 
 ModelData ModelCache::read(const std::string& path)
@@ -129,6 +153,22 @@ ModelData ModelCache::read(const std::string& path)
         return loader->load(fs.read_file(path), ctx);
     }
     throw_error("no model loader for " + path);
+}
+
+ModelData ModelCache::read(std::span<const byte> data, std::string ext)
+{
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+    for (const auto& loader : loaders)
+    {
+        if (!loader->handles(ext))
+            continue;
+
+        LoadContext ctx;
+        ctx.baseDir = "";
+        ctx.read = [this](const std::string& p) { return fs.read_file(p); };
+        return loader->load(data, ctx);
+    }
+    throw_error("no model loader for " + ext);
 }
 
 ModelAsset ModelCache::upload(const ModelData& data)

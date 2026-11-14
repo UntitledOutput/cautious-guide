@@ -1,9 +1,8 @@
 #include "loaders/bfres/sarc.hpp"
-#include "loaders/bfres/reader.hpp"
+#include "loaders/reader.hpp"
 #include "loaders/bfres/bfres.hpp"
 
 #include "graphics/model.hpp"
-#include "loaders/bfres/sarc.hpp"
 #include "loaders/bfres/gx2.hpp"
 
 #include <unordered_set>
@@ -1500,7 +1499,13 @@ graphics::AnimationData parse_skeletal_animation(const bfrs::FSKA& fska, const b
     }
 
     return anim;
-} 
+}
+
+bool BfresFile::FSKA::loops() const
+{ return flags & 0x4; }
+
+bool BfresFile::FSKA::eulerRotation() const
+{ return (flags & 0x7000) == 0x1000; }
 
 BfresModel BfresFile::parse(BfresFile* baseFile)
 {
@@ -1555,6 +1560,14 @@ BfresModel BfresFile::parse(BfresFile* baseFile)
     }
 
     return model;
+}
+
+const SarcFile* SarcArchive::find(std::string_view name) const
+{
+    for (const auto& f : files)
+        if (f.name == name)
+            return &f;
+    return nullptr;
 }
 
 std::unique_ptr<BfresFile> load_bfres(std::span<const byte> data)

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "core/util.hpp"
-#include <span>
 
 namespace graphics {
 

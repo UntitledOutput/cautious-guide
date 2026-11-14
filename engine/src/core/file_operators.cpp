@@ -1,3 +1,4 @@
+#include <glad/glad.h>
 #include "engine.hpp"
 #include "core/file.hpp"
 #include "graphics/image.hpp"

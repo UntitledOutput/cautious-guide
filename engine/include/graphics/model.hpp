@@ -175,11 +175,14 @@ namespace graphics
         void set_material_resolver(MaterialResolver r) { resolver = std::move(r); }
 
         ModelHandle load(const std::string& path);
+        ModelHandle load(std::string key, std::span<const byte> data, std::string ext);
         ModelHandle generate(std::string key,const ModelData& data);
         const ModelAsset& get(ModelHandle h) ret(assets[h]);
+        const ModelHandle find(std::string path);
 
     private:
         ModelData read(const std::string& path);
+        ModelData read(std::span<const byte> data, std::string ext);
         ModelAsset upload(const ModelData& data);
 
         RenderMgr& renderer;

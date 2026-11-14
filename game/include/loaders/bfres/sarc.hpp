@@ -7,12 +7,11 @@
 #include "math/matrix.hpp"
 #include "math/quaternion.hpp"
 
-#include "reader.hpp"
+#include "loaders/reader.hpp"
 
 #include <memory>
 #include <string_view>
 #include "graphics/model.hpp"
-#include "reader.hpp"
 
 struct SarcArchive;
 class Engine;
@@ -606,8 +605,8 @@ struct BfresFile
         u32 frameCount;
         std::vector<FSKABoneAnim> bones;
         
-        bool loops() const { return flags & 0x4; }
-        bool eulerRotation() const { return (flags & 0x7000) == 0x1000; }
+        bool loops() const;
+        bool eulerRotation() const;
     };
 
     std::vector<FMDL> models;
@@ -635,13 +634,7 @@ struct SarcArchive
     SarcArchive(const SarcArchive&) = delete;
     SarcArchive& operator=(const SarcArchive&) = delete;
 
-    const SarcFile* find(std::string_view name) const
-    {
-        for (const auto& f : files)
-            if (f.name == name)
-                return &f;
-        return nullptr;
-    }
+    const SarcFile* find(std::string_view name) const;
 };
 
 std::unique_ptr<BfresFile> load_bfres(std::span<const byte> data);
