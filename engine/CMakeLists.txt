@@ -39,7 +39,6 @@ if(WIN32)
 endif()
 
 target_link_libraries(engine PUBLIC
-    $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>
     $<IF:$<TARGET_EXISTS:SDL2::SDL2>,SDL2::SDL2,SDL2::SDL2-static>
     imgui::imgui
 )

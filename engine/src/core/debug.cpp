@@ -24,7 +24,7 @@ void updateDebugMenu(Engine& engine, float delta)
         ImGui::Begin("debug hotmenu", 0,
                      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
 
-        ImGui::Text(std::format("FPS: {:.2f}", 1.f / delta).c_str());
+        ImGui::Text(std::format("FPS: {:.2f}", 1.f / ImGui::GetIO().DeltaTime).c_str());
         ImGui::Text(std::format("Draw Calls: {0}", engine.renderer().draw_call_count()).c_str());
         if (ImGui::Checkbox("Draw Wireframe Models", &drawWireframeModels))
         {

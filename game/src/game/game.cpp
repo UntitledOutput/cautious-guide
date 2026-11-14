@@ -15,6 +15,21 @@ void SplatGame::on_init(Engine& engine)
     actions.default_bindings(engine.actions());
     engine.filesystem().register_file_operator( SARCFileOperator::initialize(engine) );
 
+    enum Layer : u32
+    {
+        L_World = 1 << 0,
+        L_Player = 1 << 1,
+        L_Ink = 1 << 2,
+        L_Zone = 1 << 3
+    };
+
+    engine.physics().events().subscribe(L_Player, L_Zone,
+                                        [&](const physics::CollisionEvent& ev)
+                                        {
+                                            //if (ev.phase == physics::ContactPhase::Begin)
+                                                //enter_zone(ev.a, ev.b); // ev.a is always the player here
+                                        });
+
     var shader_descriptor = graphics::ShaderDescriptor{};
     shader_descriptor.vertexSource = engine.filesystem().read_file_str("assets/shaders/basic.vert");
     shader_descriptor.fragmentSource = engine.filesystem().read_file_str("assets/shaders/basic.frag");

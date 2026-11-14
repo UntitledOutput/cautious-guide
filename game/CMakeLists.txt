@@ -1,3 +1,5 @@
+find_package(SDL2 CONFIG REQUIRED)
+
 file(GLOB_RECURSE GAME_SOURCES CONFIGURE_DEPENDS
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
@@ -27,3 +29,5 @@ add_dependencies(game copy_runtime)
 set_target_properties(game PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:game>"
 )
+
+target_link_libraries(game PRIVATE engine SDL2::SDL2main)

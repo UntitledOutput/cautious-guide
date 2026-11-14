@@ -35,6 +35,8 @@ Engine::Engine(EngineConfiguration cfg) : _cfg(std::move(cfg)), _window(std::mak
     _models = std::make_unique<graphics::ModelCache>(*_renderMgr, *_filesystem);
     _models->add_loader(graphics::make_gltf_loader());
 
+    _physics = std::make_unique<physics::PhysicsWorld>();
+
     regen_world();
 }
 
@@ -65,14 +67,15 @@ int Engine::start(GameCtrl& game)
             glViewport(0, 0, _window->framebuffer_width(), _window->framebuffer_height());
         while (acc >= tick_step)
         {
-            game.on_fixed_update(*this,tick_step);
+            game.on_fixed_update(*this, tick_step);
+            _physics->step(*_world, float(tick_step));
             _actions->consume_tick();
             acc -= tick_step;
         }
+        _physics->flush_events();
 
         game.on_update(*this, frame);
-
-        game.on_render(*this, frame);
+        game.on_render(*this, acc / tick_step);
         _renderMgr->flush();
         _window->swap();
         _frame_count++;
@@ -91,6 +94,8 @@ void Engine::regen_world()
     }
 
     _world = std::make_unique<ecs::World>();
+    _physics.reset();
+    _physics = std::make_unique<physics::PhysicsWorld>();
 }
 
 Engine::SDLContext::SDLContext()

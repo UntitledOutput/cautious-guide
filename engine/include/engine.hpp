@@ -13,6 +13,7 @@
 #include <core/file.hpp>
 
 #include "core/input.hpp"
+#include "physics/world.hpp"
 
 namespace graphics
 {
@@ -56,6 +57,8 @@ public:
     input::ActionMap& actions() ret(*_actions);
     Window& window() ret(*_window)
     graphics::ModelCache& models() ret(*_models) 
+    physics::PhysicsWorld& physics()
+        ret(*_physics)
     ecs::World& world() ret(*_world)
 
 
@@ -90,6 +93,7 @@ private:
 
     std::unique_ptr<graphics::ModelCache> _models;
     std::unique_ptr<ecs::World> _world;
+    std::unique_ptr<physics::PhysicsWorld> _physics = std::make_unique<physics::PhysicsWorld>();
 
 
     int _frame_count = 0;
