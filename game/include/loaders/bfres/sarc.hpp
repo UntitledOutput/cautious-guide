@@ -9,7 +9,12 @@
 
 #include "reader.hpp"
 
+#include <memory>
+#include <string_view>
+#include "graphics/model.hpp"
+#include "reader.hpp"
 
+class Engine;
 
 struct BfresFile
 {
@@ -39,7 +44,6 @@ struct BfresFile
             u16 smoothMatrixIndex;
             u16 rigidMatrixIndex;
             u16 billboardIndex;
-            FsklBone* parent;
         };
 
         std::vector<FsklBone> bones;
@@ -101,9 +105,6 @@ struct BfresFile
             std::span<const byte> data;
             u16 stride;
             std::vector<FvtxVertexAttribute> attributes;
-
-            std::vector<math::vec2> getVector2Data(FvtxVertexAttribute attribute);
-            std::vector<math::vec3> getVector3Data(FvtxVertexAttribute attribute);
         };
 
         u32 vertexCount = 0;
@@ -164,7 +165,7 @@ struct BfresFile
             /// <summary>
             /// Represents a 2x3 texture matrix, having a size of 24 bytes.
             /// </summary>
-            Matrix2x3 = 0x1E
+            TexSrt = 0x1E
         };
 
         struct FMATRenderParameter
@@ -200,7 +201,8 @@ struct BfresFile
             math::vec2 vector2Value;
             math::vec3 vector3Value;
             math::vec4 vector4Value;
-            math::mat4 matrixValue;
+            u32 texSrtMode = 0;
+            float texSrt[5] = {}; // scale x, scale y, rotation, translate x, translate y
         };
 
 
@@ -279,11 +281,11 @@ struct BfresFile
         std::vector<FvtxVertexBuffer> vertexBuffers;
         std::vector<FMAT> materials;
         std::vector<FSHP> shapes;
+
+        graphics::ModelData parse();
     };
 
     std::vector<FMDL> models;
-
-    std::vector<byte> storage;
 };
 
 struct SarcFile

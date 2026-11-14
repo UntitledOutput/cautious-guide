@@ -34,9 +34,11 @@ void SplatGame::on_init(Engine& engine)
         });
 
     judge.reset(static_cast<SarcArchive*>(engine.filesystem().read_file_auto("assets/Npc_Judge.szs")));
-    const BfresFile& bfres = *judge->find("Output.bfres")->bfres;
+    const SarcFile* entry = judge->find("Output.bfres");
+    if (!entry || !entry->bfres)
+        throw_error("Npc_Judge.szs has no Output.bfres");
 
-    model = engine.models().load("assets/models/RiggedSimple.glb");
+    model = engine.models().generate(entry->bfres->models[0].name, entry->bfres->models[0].parse());
     var e = scene::spawn_model(engine.world(), model);
     engine.world().add<Animator>(e);
     engine.world().add<Pose>(e);

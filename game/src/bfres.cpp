@@ -2,6 +2,8 @@
 #include "loaders/bfres/reader.hpp"
 #include "loaders/bfres/bfres.hpp"
 
+#include "graphics/model.hpp"
+
 using bfrs = BfresFile;
 
 math::vec4 decode_attribute(filesys::ByteReader& r, BfresFile::FvtxVertexBuffer::FvtxVertexAttributeFormat format)
@@ -44,7 +46,39 @@ math::vec4 decode_attribute(filesys::ByteReader& r, BfresFile::FvtxVertexBuffer:
     }
 }
 
-std::vector<math::vec4> read_attribute(const BfresFile::FvtxVertexBuffer& vb, std::string_view name)
+template <typename T>
+T convert_attribute(const math::vec4& v);
+
+template <>
+inline math::vec4 convert_attribute(const math::vec4& v)
+{
+    return v;
+}
+template <>
+inline math::vec3 convert_attribute(const math::vec4& v)
+{
+    return {v.x, v.y, v.z};
+}
+template <>
+inline math::vec2 convert_attribute(const math::vec4& v)
+{
+    return {v.x, v.y};
+}
+template <>
+inline float convert_attribute(const math::vec4& v)
+{
+    return v.x;
+}
+
+// bone indices come through as exact whole-number floats
+template <>
+inline std::array<u16, 4> convert_attribute(const math::vec4& v)
+{
+    return {u16(std::lround(v.x)), u16(std::lround(v.y)), u16(std::lround(v.z)), u16(std::lround(v.w))};
+}
+
+template <typename T>
+std::vector<T> read_attribute(const BfresFile::FvtxVertexBuffer& vb, std::string_view name)
 {
     for (const auto& buf : vb.data)
         for (const auto& a : buf.attributes)
@@ -53,11 +87,12 @@ std::vector<math::vec4> read_attribute(const BfresFile::FvtxVertexBuffer& vb, st
                 continue;
 
             filesys::ByteReader r(buf.data, true);
-            std::vector<math::vec4> out(vb.vertexCount);
+            std::vector<T> out;
+            out.reserve(vb.vertexCount);
             for (u32 i = 0; i < vb.vertexCount; ++i)
             {
                 r.seek(size_t(i) * buf.stride + a.offset);
-                out[i] = decode_attribute(r, a.format);
+                out.push_back(convert_attribute<T>(decode_attribute(r, a.format)));
             }
             return out;
         }
@@ -196,7 +231,13 @@ BfresFile::Dictionary load_dictionary(filesys::ByteReader& r)
     return dictionary;
 }
 
-
+BfresFile::Dictionary load_dictionary_at(filesys::ByteReader& r, size_t offset)
+{
+    if (offset == 0)
+        return {};
+    r.seek(offset);
+    return load_dictionary(r);
+}
 
 BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
 {
@@ -217,8 +258,7 @@ BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
     var inverseIndexArrayOffset = r.read_rel_offset();
     var inverseMatrixArrayOffset = r.read_rel_offset();
 
-    r.seek(boneIndexGroupOffset);
-    var boneIndexGroup = load_dictionary(r);
+    var boneIndexGroup = load_dictionary_at(r, boneIndexGroupOffset);
 
     r.seek(boneArrayOffset);
     for (int i = 0; i < boneCount; ++i)
@@ -266,67 +306,6 @@ BfresFile::FSKL load_skeleton(filesys::ByteReader& r)
 
 
     return fskl;
-}
-
-std::vector<math::vec2> BfresFile::FvtxVertexBuffer::FvtxVertexData::getVector2Data(FvtxVertexAttribute attribute)
-{
-    var _data = std::vector<math::vec2>();
-
-    var reader = filesys::ByteReader(data, true);
-    for (int i = 0; i < data.size(); i += stride)
-    {
-        reader.seek(i + attribute.offset);
-        switch (attribute.format)
-        {
-            case FvtxVertexAttributeFormat::Two_32Bit_Float:
-                _data.push_back(reader.read_vec2());
-                break;
-            case FvtxVertexAttributeFormat::Two_16Bit_Normalized:
-                {
-                    u16 x = reader.read<u16>();
-                    u16 y = reader.read<u16>();
-                    _data.push_back(math::vec2(cflt x / 65535.f, cflt y / 65535.f));
-                }
-                break;
-            default:
-                throw_error("mismatching format");
-        }
-    }
-
-    return _data;
-}
-
-std::vector<math::vec3> BfresFile::FvtxVertexBuffer::FvtxVertexData::getVector3Data(FvtxVertexAttribute attribute)
-{
-    
-    var _data = std::vector<math::vec3>();
-
-    var reader = filesys::ByteReader(data, true);
-    for (int i = 0; i < data.size(); i += stride)
-    {
-        reader.seek(i + attribute.offset);
-        switch (attribute.format)
-        {
-            case FvtxVertexAttributeFormat::Three_32Bit_Float:
-                _data.push_back(reader.read_vec3());
-                break;
-            case FvtxVertexAttributeFormat::Three_10Bit_Signed:
-                {
-                    uint packedBytes = reader.read<u32>();
-                    short x = (short)((packedBytes >> 20) & 0x3FF);
-                    short y = (short)((packedBytes >> 10) & 0x3FF);
-                    short z = (short)(packedBytes & 0x3FF);
-                    // Divide by 511 to get the float value.
-                    _data.push_back(math::vec3(x / 511.f, y / 511.f, z / 511.f));
-                }
-                break;
-            default:
-                throw_error("mismatching format");
-        }
-    }
-
-    return _data;
-
 }
 
 
@@ -387,8 +366,8 @@ BfresFile::FvtxVertexBuffer load_vertex_buffer(filesys::ByteReader& r)
         buffer.data[bufferIndex].attributes.push_back(a);
     }
 
-    r.seek(attributeIndexGroupOffset);
-    var attributeIndexGroup = load_dictionary(r);
+
+    var attributeIndexGroup = load_dictionary_at(r, attributeIndexGroupOffset);
 
 
     return buffer;
@@ -426,8 +405,7 @@ BfresFile::FMAT load_material(filesys::ByteReader& r)
     r.read_rel_offset();
 
     // render params
-    r.seek(renderParamIndexGroupOffset);
-    var renderParameterIndexGroup = load_dictionary(r);
+    var renderParameterIndexGroup = load_dictionary_at(r, renderParamIndexGroupOffset);
 
     mat.renderParams = std::vector<BfresFile::FMAT::FMATRenderParameter>(renderParameterIndexGroup.nodes.size());
     for (int i = 0; i < renderParameterIndexGroup.nodes.size(); ++i)
@@ -538,18 +516,10 @@ BfresFile::FMAT load_material(filesys::ByteReader& r)
                 case BfresFile::FMAT::FmatMaterialParameterType::Vector4F:
                     parameter.vector4Value = r.read_vec4();
                     break;
-                case BfresFile::FMAT::FmatMaterialParameterType::Matrix2x3:
-                    {
-                        float m11 = r.read<float>();
-                        float m21 = r.read<float>();
-                        float m12 = r.read<float>();
-                        float m22 = r.read<float>();
-                        float m13 = r.read<float>();
-                        float m23 = r.read<float>();
-                        parameter.matrixValue = math::mat4();
-                        parameter.matrixValue[1] = {m11, m12, m13, 0};
-                        parameter.matrixValue[2] = {m21, m22, m23, 0};
-                    }
+                case BfresFile::FMAT::FmatMaterialParameterType::TexSrt:
+                    parameter.texSrtMode = r.read<u32>();
+                    for (float& f : parameter.texSrt)
+                        f = r.read<float>();
                     break;
                 default:
                     break;
@@ -575,28 +545,26 @@ BfresFile::FMAT load_material(filesys::ByteReader& r)
         var fragmentShaderInputIndexGroupOffset = r.read_rel_offset();
         var parameterIndexGroupOffset = r.read_rel_offset();
 
-        r.seek(vertexShaderInputIndexGroupOffset);
-        var vtxShaderInputGroup = load_dictionary(r);
+
+
+        var vtxShaderInputGroup = load_dictionary_at(r, vertexShaderInputIndexGroupOffset);
 
         for (auto& node : vtxShaderInputGroup.nodes)
             mat.shaderControl.vertexShaderInputs.push_back(node.name);
 
-        r.seek(fragmentShaderInputIndexGroupOffset);
-        var frgShaderInputGroup = load_dictionary(r);
+        var frgShaderInputGroup = load_dictionary_at(r, fragmentShaderInputIndexGroupOffset);
 
         for (auto& node : frgShaderInputGroup.nodes)
             mat.shaderControl.fragmentShaderInputs.push_back(node.name);
 
-        r.seek(parameterIndexGroupOffset);
-        var parameterInputGroup = load_dictionary(r);
+        var parameterInputGroup = load_dictionary_at(r, parameterIndexGroupOffset);
 
         for (auto& node : parameterInputGroup.nodes)
             mat.shaderControl.parameters.push_back(node.name);
     }
 
     // shadow parameters
-    r.seek(shadowParameterIndexGroupOffset);
-    var shadowInputGroup = load_dictionary(r);
+    var shadowInputGroup = load_dictionary_at(r, shadowParameterIndexGroupOffset);
 
     for (auto node : shadowInputGroup.nodes)
     {
@@ -639,8 +607,10 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
     u16 skeletonIndexArrayCount = r.read<u16>();
     shape.vertexSkinCount = r.read<byte>();
     var lodModelCount = r.read<byte>();
-    var visibilityNodeCount = r.read<u32>();
-    r.read<float>();
+    r.read<byte>(); // key shape count
+    r.read<byte>(); // target attribute count
+    var visibilityNodeCount = r.read<u16>();
+    r.read<float>(); // bounding radius
 
     var vertexBufferOffset = r.read_rel_offset();
     var lodModelOffset = r.read_rel_offset();
@@ -659,8 +629,9 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
     {
         var lodModel = bfrs::FSHP::FSHPLodModel{};
 
-        r.read<u32>();
-        r.read<u32>();
+        if (r.read<u32>() != 4)
+            throw_error("fshp: only triangle lists are supported");
+            const u32 indexFormat = r.read<u32>();
 
         lodModel.totalPointCount = r.read<u32>();
         lodModel.visibilityGroups = std::vector<bfrs::FSHP::FSHPVisibilityGroup>(r.read<u16>());
@@ -696,7 +667,15 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
             var indexBuffer = bfrs::FSHP::FSHPIndexBuffer{};
 
             r.seek(dataOffset);
-            indexBuffer.data = r.read_list<u16>(indexBufferSize / 2);
+            if (indexFormat == 4)
+            {
+                const auto idx = r.read_list<u16>(indexBufferSize / 2);
+                indexBuffer.data.assign(idx.begin(), idx.end());
+            }
+            else if (indexFormat == 9)
+                indexBuffer.data = r.read_list<u32>(indexBufferSize / 4);
+            else
+                throw_error("fshp: unsupported index format " + std::to_string(indexFormat));
 
             lodModel.indexBuffer = indexBuffer;
         }
@@ -725,11 +704,13 @@ BfresFile::FSHP load_shape(filesys::ByteReader& r)
     r.seek(visibilityRangesOffset);
     for (int i = 0; i < visibilityNodeCount; i++)
     {
-        var node = shape.visibilityNodes[i];
-
-        for (int j = 0; j < node.visibilityGroups.size(); j++)
+        auto& node = shape.visibilityNodes[i];
+        for (size_t j = 0; j < node.visibilityGroups.size(); j++)
         {
-            node.visibilityGroups[j] = shape.lodModels[0].visibilityGroups[j + node.visibilityGroupIndex];
+            const size_t g = j + node.visibilityGroupIndex;
+            if (shape.lodModels.empty() || g >= shape.lodModels[0].visibilityGroups.size())
+                throw_error("fshp: visibility group out of range");
+            node.visibilityGroups[j] = shape.lodModels[0].visibilityGroups[g];
         }
         
         
@@ -789,8 +770,7 @@ BfresFile::FMDL load_model(filesys::ByteReader& r)
         fmdl.vertexBuffers[i] = load_vertex_buffer(r);
     }
 
-    r.seek(materialDictionaryOffset);
-    var materialDictionary = load_dictionary(r);
+    var materialDictionary = load_dictionary_at(r, materialDictionaryOffset);
     fmdl.materials = std::vector<BfresFile::FMAT>(materialDictionary.nodes.size());
     for (int i = 0; i < materialDictionary.nodes.size(); ++i)
     {
@@ -799,7 +779,7 @@ BfresFile::FMDL load_model(filesys::ByteReader& r)
     }
 
     r.seek(shapeDictionaryOffset);
-    var shapeDictionary = load_dictionary(r);
+    var shapeDictionary = load_dictionary_at(r, shapeDictionaryOffset);
     fmdl.shapes = std::vector<BfresFile::FSHP>(shapeDictionary.nodes.size());
     for (int i = 0; i < shapeDictionary.nodes.size(); ++i)
     {
@@ -808,7 +788,118 @@ BfresFile::FMDL load_model(filesys::ByteReader& r)
     }
 
     return fmdl;
-} 
+}
+
+graphics::ModelData BfresFile::FMDL::parse()
+{
+    graphics::ModelData data;
+
+    for (size_t i = 0; i < skeleton.bones.size(); ++i)
+    {
+        const auto& bone = skeleton.bones[i];
+        graphics::NodeData node;
+        node.name = bone.name;
+        node.parent = bone.parentIndex == 0xFFFF ? -1 : int(bone.parentIndex);
+        if (node.parent >= int(i))
+            throw_error("fskl: bones aren't parent-first");
+        node.translation = bone.position;
+        node.rotation = bone.rotation;
+        node.scale = bone.scale;
+        data.nodes.push_back(std::move(node));
+    }
+
+    graphics::SkinData skin;
+    for (size_t i = 0; i < skeleton.matrixToBone.size(); ++i)
+    {
+        const u16 b = skeleton.matrixToBone[i];
+        if (b >= skeleton.bones.size())
+            throw_error("fskl: matrix references a missing bone");
+        skin.joints.push_back(b);
+        // rigid entries come after the smooth ones, their vertices are already in bone space
+        skin.inverseBind.push_back(i < skeleton.inverseMatrices.size() ? skeleton.inverseMatrices[i]
+                                                                       : math::mat4::identity());
+    }
+    data.skins.push_back(std::move(skin));
+
+    const u32 skinnedNode = u32(data.nodes.size());
+    graphics::NodeData skinned;
+    skinned.name = "__skinned";
+    skinned.skin = 0;
+    data.nodes.push_back(std::move(skinned));
+
+    for (const FSHP& shape : shapes)
+    {
+        if (shape.lodModels.empty() || shape.lodModels[0].indexBuffer.data.empty())
+            throw_error("fshp: no index data");
+        if (shape.vertexBufferIndex >= vertexBuffers.size())
+            throw_error("fshp: vertex buffer index out of range");
+
+        const auto& vb = vertexBuffers[shape.vertexBufferIndex];
+        graphics::MeshData mesh;
+        mesh.name = shape.name;
+        mesh.indices = shape.lodModels[0].indexBuffer.data;
+        mesh.positions = read_attribute<math::vec3>(vb, "_p0");
+        mesh.normals = read_attribute<math::vec3>(vb, "_n0");
+        mesh.tangents = read_attribute<math::vec4>(vb, "_t0");
+        mesh.uvs[0] = read_attribute<math::vec2>(vb, "_u0");
+        mesh.colors = read_attribute<math::vec4>(vb, "_c0");
+        mesh.material = shape.materialIndex;
+
+        const u32 meshIndex = u32(data.meshes.size());
+
+        if (shape.vertexSkinCount == 0)
+        {
+            if (shape.boneIndex >= skeleton.bones.size())
+                throw_error("fshp: bone index out of range");
+            data.nodes[shape.boneIndex].meshes.push_back(meshIndex);
+        }
+        else
+        {
+            mesh.joints = read_attribute<std::array<u16, 4>>(vb, "_i0");
+            mesh.weights = read_attribute<math::vec4>(vb, "_w0");
+            if (mesh.joints.size() != mesh.positions.size())
+                throw_error("fshp: skinned shape is missing _i0");
+            if (mesh.weights.empty())
+                mesh.weights.assign(mesh.positions.size(), {1.0f, 0.0f, 0.0f, 0.0f});
+
+            // only the first skinCount slots are meaningful
+            const u32 k = shape.vertexSkinCount;
+            for (size_t v = 0; v < mesh.joints.size(); ++v)
+            {
+                auto& j = mesh.joints[v];
+                auto& w = mesh.weights[v];
+                if (k < 4)
+                {
+                    j[3] = 0;
+                    w.w = 0.0f;
+                }
+                if (k < 3)
+                {
+                    j[2] = 0;
+                    w.z = 0.0f;
+                }
+                if (k < 2)
+                {
+                    j[1] = 0;
+                    w.y = 0.0f;
+                    w.x = 1.0f;
+                }
+            }
+            data.nodes[skinnedNode].meshes.push_back(meshIndex);
+        }
+
+        data.meshes.push_back(std::move(mesh));
+    }
+
+    for (const FMAT& material : materials)
+    {
+        graphics::MaterialData m;
+        m.name = material.name;
+        m.shader = material.shaderControl.vertexShaderName + "_" + material.shaderControl.fragmentShaderName;
+        data.materials.push_back(std::move(m));
+    }
+    return data;
+}
 
 std::unique_ptr<BfresFile> load_bfres(std::span<const byte> data)
 {
@@ -839,17 +930,7 @@ std::unique_ptr<BfresFile> load_bfres(std::span<const byte> data)
     var dictionaries = std::vector<BfresFile::Dictionary>(12);
     for (int i = 0; i < 12; ++i)
     {
-        var offset = indexGroupOffsets[i];
-        uint count = indexGroupCounts[i];
-
-        var dictionary = BfresFile::Dictionary{};
-
-        if (count > 0)
-        {
-            r.seek(offset);
-            dictionary = load_dictionary(r);
-        }
-        dictionaries[i] = dictionary;
+        dictionaries[i] = load_dictionary_at(r, indexGroupOffsets[i]);
     }
 
     auto bfres = std::make_unique<BfresFile>();

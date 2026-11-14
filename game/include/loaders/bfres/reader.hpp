@@ -73,15 +73,11 @@ namespace filesys
             return off == 0 ? 0 : size_t(int64_t(at) + off);
         }
 
-        size_t* read_offset_array(size_t count) {
-            size_t* c = new size_t[count];
-
-            for (int i = 0; i < count; ++i)
-            {
-                c[i] = read_rel_offset();
-            }
-
-            return c;
+        std::vector<size_t> read_offset_array(size_t count) {
+            std::vector<std::size_t> out(count);
+            for (size_t i = 0; i < count; ++i)
+                out[i] = read_rel_offset();
+            return out;
         }
 
         std::string string_at(size_t at) const
