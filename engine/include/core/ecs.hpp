@@ -190,7 +190,40 @@ namespace ecs
                     fn(e, std::get<Pool<Ts>*>(pools)->get(e)...);
         }
 
+        template <typename Fn>
+        Entity find(Fn&& pred)
+        {
+            for (Entity e : smallest()->entities())
+                if (has_all(e) && pred(e, std::get<Pool<Ts>*>(pools)->get(e)...))
+                    return e;
+            return null_entity;
+        }
+
+        Entity first()
+        {
+            return find([](Entity, auto&...) { return true; });
+        }
+
+        size_t count()
+        {
+            size_t n = 0;
+            for (Entity e : smallest()->entities())
+                n += has_all(e);
+            return n;
+        }
+
+
     private:
+        const IPool* smallest() const
+        {
+            const IPool* s = nullptr;
+            ((s = (!s || std::get<Pool<Ts>*>(pools)->size() < s->size()) ? std::get<Pool<Ts>*>(pools) : s), ...);
+            return s;
+        }
+
+        bool has_all(Entity e) const { return (std::get<Pool<Ts>*>(pools)->contains(e) && ...); }
+
+
         std::tuple<Pool<Ts>*...> pools;
     };
 

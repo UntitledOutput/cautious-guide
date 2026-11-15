@@ -26,7 +26,6 @@ public:
     void on_fixed_update(GameCtrl& game, Engine& engine, float delta) override;
     void on_render(GameCtrl& game, Engine& engine, float delta) override;
 
-        void spawn_balls(Engine& engine);
 
         std::vector<ecs::Entity> _balls;
     int _ballCount = 200;

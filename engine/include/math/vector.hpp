@@ -11,6 +11,7 @@ namespace math
         static constexpr int N = 2;
         constexpr float& operator[](int i) { return i == 0 ? x : y; }
         constexpr float operator[](int i) const { return i == 0 ? x : y; }
+        float magnitude() { return std::sqrt(x * x + y * y); }
     };
 
     struct vec3

@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
 cmake_policy(SET CMP0141 NEW)
-set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<$<CONFIG:Debug>:EditAndContinue>")
 project(GambitPC VERSION 0.1 LANGUAGES C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -26,4 +25,7 @@ target_precompile_headers(engine PRIVATE
     <string> <vector> <memory> <unordered_map> <span>
     <filesystem> <functional> <variant> <array>
 )
-target_precompile_headers(game REUSE_FROM engine)
+target_precompile_headers(game PRIVATE
+    <string> <vector> <memory> <unordered_map> <span>
+    <filesystem> <functional> <variant> <array>
+)

@@ -4,6 +4,7 @@
 #include "core/debug.hpp"
 #include "debug/debug.hpp"
 #include "game/game.hpp"
+#include "game/components/player.hpp"
 #include "graphics/primitive.hpp"
 #include "scene/render_system.hpp"
 #include "states/state_base.hpp"
@@ -50,7 +51,7 @@ void BootState::on_render(GameCtrl& game, Engine& engine, float delta)
 #include <SDL.h>
 namespace
 {
-    constexpr u32 L_Ground = 1 << 0, L_Ball = 1 << 1;
+    constexpr u32 L_Ground = 1 << 0, L_Player = 1 << 1;
 }
 #include "physics/world.hpp"
 #include <imgui.h>
@@ -63,7 +64,7 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
 
     var cam = engine.world().create();
     engine.world().add<graphics::Camera>(cam);
-    engine.world().add<FreeCam>(cam);
+    engine.world().add<PlayerCamera>(cam);
     engine.world().add<scene::Transform>(cam);
 
     scene::Transform gt;
@@ -75,17 +76,16 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     gc.offset = {0, -0.5f, 0}; // visual plane at y=0, collision slab below it
     gc.layer = L_Ground;
 
-    engine.physics().events().subscribe(L_Ball, L_Ground,
-                                        [this](const physics::CollisionEvent& ev)
-                                        {
-                                            if (ev.phase == physics::ContactPhase::Begin)
-                                                ++_groundHits;
-                                        });
-
     engine.world().get<scene::Transform>(cam).position = {5, 5, 5};
     engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
 
-    spawn_balls(engine);
+    var player = scene::spawn_model(engine.world(), get_primitive(PrimitiveType::Capsule, engine));
+    engine.world().add<Player>(player);
+    var& c = engine.world().add<physics::Collider>(player);
+    c.capsule.radius = 0.5f;
+    c.capsule.halfHeight = 1.f;
+    c.layer = L_Player;
+    engine.world().add<physics::RigidBody>(player);
 
 }
 
@@ -148,6 +148,7 @@ void free_cam(Engine& engine, float dt)
 void MatchScene::on_update(GameCtrl& game, Engine& engine, float delta)
 {
     free_cam(engine, delta);
+    update_player(engine, delta);
     graphics::update_camera(engine);
 }
 
@@ -167,36 +168,3 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
 
     ImGui::End();
 }
-
-void MatchScene::spawn_balls(Engine& engine)
-{
-
-    var& w = engine.world();
-    for (var e : _balls)
-    {
-        engine.physics().on_destroyed(e);
-        w.destroy(e);
-    }
-    _balls.clear();
-    _groundHits = 0;
-
-    std::mt19937 rng(1234); // fixed seed so runs are repeatable
-    std::uniform_real_distribution<float> jitter(-0.2f, 0.2f);
-    var sphere = get_primitive(PrimitiveType::Sphere, engine);
-
-    const int side = int(std::ceil(std::cbrt(float(_ballCount))));
-    for (int i = 0; i < _ballCount; ++i)
-    {
-        const int x = i % side, z = (i / side) % side, y = i / (side * side);
-        scene::Transform t;
-        t.position = {(x - side * 0.5f) * 1.2f + jitter(rng), 3.0f + y * 1.2f, (z - side * 0.5f) * 1.2f + jitter(rng)};
-
-        var e = scene::spawn_model(w, sphere, t);
-        var& c = w.add<physics::Collider>(e);
-        c.sphere.radius = 1.0f;
-        c.layer = L_Ball;
-        w.add<physics::RigidBody>(e).restitution = _restitution;
-        _balls.push_back(e);
-    }
-}
-
