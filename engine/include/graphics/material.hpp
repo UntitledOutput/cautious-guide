@@ -37,6 +37,7 @@ namespace graphics
     struct RenderState
     {
         bool blend = false, depthWrite = true, cullBack = true;
+        bool wireframe = false;
     };
 
     struct Material

@@ -8,6 +8,8 @@
 #include "states/main_state.hpp"
 #include "states/state_base.hpp"
 
+static graphics::ShaderHandle defaultShader;
+
 void SplatGame::on_init(Engine& engine)
 {
     SplatActions actions;
@@ -35,13 +37,13 @@ void SplatGame::on_init(Engine& engine)
     shader_descriptor.fragmentSource = engine.filesystem().read_file_str("assets/shaders/basic.frag");
     currentGameState = (std::make_unique<BootState>());
 
-    var shader = engine.renderer().create_shader(shader_descriptor);
+    defaultShader = engine.renderer().create_shader(shader_descriptor);
 
     engine.models().set_material_resolver(
         [&](const graphics::MaterialData& md, std::span<const graphics::TextureHandle> textures)
         {
             var& r = engine.renderer();
-            var h = r.create_material(shader);
+            var h = r.create_material(defaultShader);
             for (const auto& [name, value] : md.params)
                 std::visit([&](const auto& v) { r.set_material_param(h, name, v); }, value);
             for (const auto& [sampler, index] : md.textures)

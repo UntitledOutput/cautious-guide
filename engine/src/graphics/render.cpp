@@ -142,6 +142,8 @@ namespace
             s.cullBack ? glEnable(GL_CULL_FACE) : glDisable(GL_CULL_FACE);
         if (force || s.depthWrite != cur.depthWrite)
             glDepthMask(s.depthWrite ? GL_TRUE : GL_FALSE);
+        if (force || s.wireframe != cur.wireframe)
+            glPolygonMode(GL_FRONT_AND_BACK,s.wireframe ? GL_LINE : GL_FILL);
         cur = s;
     }
 

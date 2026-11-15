@@ -19,25 +19,22 @@ namespace physics
 
         using NarrowFn = std::optional<ContactManifold> (*)(const ShapeView&, const ShapeView&);
 
-        std::optional<ContactManifold> sphere_sphere(const ShapeView& a, const ShapeView& b)
+        std::optional<ContactManifold> point_point(math::vec3 pa, float ra, math::vec3 pb, float rb)
         {
-            const math::vec3 d = b.center - a.center;
+            const math::vec3 d = pb - pa;
             const float dist2 = math::dot(d, d);
-            const float r = a.c->sphere.radius + b.c->sphere.radius;
+            const float r = ra + rb;
             if (dist2 >= r * r)
                 return std::nullopt;
 
             const float dist = std::sqrt(dist2);
             const math::vec3 n = dist > 1e-6f ? d / dist : math::vec3{0, 1, 0};
-            return ContactManifold{a.center + n * a.c->sphere.radius, n, r - dist};
+            return ContactManifold{pa + n * ra, n, r - dist};
         }
 
-        std::optional<ContactManifold> sphere_box(const ShapeView& s, const ShapeView& bx)
+        std::optional<ContactManifold> point_box(math::vec3 p, float r, math::vec3 boxCenter, math::vec3 h)
         {
-            const float r = s.c->sphere.radius;
-            const math::vec3 h = bx.c->box.halfExtents;
-            const math::vec3 local = s.center - bx.center;
-
+            const math::vec3 local = p - boxCenter;
             const math::vec3 q{std::clamp(local.x, -h.x, h.x), std::clamp(local.y, -h.y, h.y),
                                std::clamp(local.z, -h.z, h.z)};
             const math::vec3 d = q - local;
@@ -48,7 +45,7 @@ namespace physics
             if (dist2 > 1e-8f)
             {
                 const float dist = std::sqrt(dist2);
-                return ContactManifold{bx.center + q, d / dist, r - dist};
+                return ContactManifold{boxCenter + q, d / dist, r - dist};
             }
 
             // center is inside the box, push out through the nearest face
@@ -65,7 +62,128 @@ namespace physics
             }
             math::vec3 n{};
             n[axis] = local[axis] > 0.0f ? -1.0f : 1.0f;
-            return ContactManifold{s.center, n, r + best};
+            return ContactManifold{p, n, r + best};
+        }
+
+        // capsules are y-up segments, halfHeight is the straight part only
+        struct Segment
+        {
+            math::vec3 p0, p1;
+        };
+
+        Segment capsule_segment(const ShapeView& s)
+        {
+            const math::vec3 up{0.0f, s.c->capsule.halfHeight, 0.0f};
+            return {s.center - up, s.center + up};
+        }
+
+        math::vec3 closest_on_segment(const Segment& s, math::vec3 p)
+        {
+            const math::vec3 d = s.p1 - s.p0;
+            const float len2 = math::dot(d, d);
+            if (len2 < 1e-12f)
+                return s.p0;
+            const float t = std::clamp(math::dot(p - s.p0, d) / len2, 0.0f, 1.0f);
+            return s.p0 + d * t;
+        }
+
+        // ericson, real-time collision detection 5.1.9
+        void closest_between_segments(const Segment& s1, const Segment& s2, math::vec3& c1, math::vec3& c2)
+        {
+            const math::vec3 d1 = s1.p1 - s1.p0, d2 = s2.p1 - s2.p0, r = s1.p0 - s2.p0;
+            const float a = math::dot(d1, d1), e = math::dot(d2, d2), f = math::dot(d2, r);
+            constexpr float eps = 1e-12f;
+            float s = 0.0f, t = 0.0f;
+
+            if (a <= eps && e <= eps)
+            {
+                c1 = s1.p0;
+                c2 = s2.p0;
+                return;
+            }
+            if (a <= eps)
+                t = std::clamp(f / e, 0.0f, 1.0f);
+            else
+            {
+                const float c = math::dot(d1, r);
+                if (e <= eps)
+                    s = std::clamp(-c / a, 0.0f, 1.0f);
+                else
+                {
+                    const float b = math::dot(d1, d2);
+                    const float denom = a * e - b * b;
+                    s = denom > eps ? std::clamp((b * f - c * e) / denom, 0.0f, 1.0f) : 0.0f;
+                    t = (b * s + f) / e;
+                    if (t < 0.0f)
+                    {
+                        t = 0.0f;
+                        s = std::clamp(-c / a, 0.0f, 1.0f);
+                    }
+                    else if (t > 1.0f)
+                    {
+                        t = 1.0f;
+                        s = std::clamp((b - c) / a, 0.0f, 1.0f);
+                    }
+                }
+            }
+            c1 = s1.p0 + d1 * s;
+            c2 = s2.p0 + d2 * t;
+        }
+
+        std::optional<ContactManifold> sphere_sphere(const ShapeView& a, const ShapeView& b)
+        {
+            return point_point(a.center, a.c->sphere.radius, b.center, b.c->sphere.radius);
+        }
+
+        std::optional<ContactManifold> sphere_box(const ShapeView& s, const ShapeView& bx)
+        {
+            return point_box(s.center, s.c->sphere.radius, bx.center, bx.c->box.halfExtents);
+        }
+
+        std::optional<ContactManifold> capsule_sphere(const ShapeView& cap, const ShapeView& s)
+        {
+            const math::vec3 p = closest_on_segment(capsule_segment(cap), s.center);
+            return point_point(p, cap.c->capsule.radius, s.center, s.c->sphere.radius);
+        }
+
+        std::optional<ContactManifold> sphere_capsule(const ShapeView& s, const ShapeView& cap)
+        {
+            auto m = capsule_sphere(cap, s);
+            if (m)
+                m->normal = -m->normal;
+            return m;
+        }
+
+        std::optional<ContactManifold> capsule_capsule(const ShapeView& a, const ShapeView& b)
+        {
+            math::vec3 ca, cb;
+            closest_between_segments(capsule_segment(a), capsule_segment(b), ca, cb);
+            return point_point(ca, a.c->capsule.radius, cb, b.c->capsule.radius);
+        }
+
+        std::optional<ContactManifold> capsule_box(const ShapeView& cap, const ShapeView& bx)
+        {
+            // segment is vertical and the box is axis aligned, so the closest point only depends on y
+            const Segment seg = capsule_segment(cap);
+            const math::vec3 h = bx.c->box.halfExtents;
+            const float lo = std::max(seg.p0.y, bx.center.y - h.y);
+            const float hi = std::min(seg.p1.y, bx.center.y + h.y);
+
+            math::vec3 p = cap.center;
+            if (lo <= hi)
+                p.y = (lo + hi) * 0.5f;
+            else
+                p.y = seg.p0.y > bx.center.y ? seg.p0.y : seg.p1.y;
+
+            return point_box(p, cap.c->capsule.radius, bx.center, h);
+        }
+
+        std::optional<ContactManifold> box_capsule(const ShapeView& bx, const ShapeView& cap)
+        {
+            auto m = capsule_box(cap, bx);
+            if (m)
+                m->normal = -m->normal;
+            return m;
         }
 
         std::optional<ContactManifold> box_sphere(const ShapeView& bx, const ShapeView& s)
@@ -101,10 +219,10 @@ namespace physics
 
         constexpr size_t kShapes = size_t(ShapeType::Count);
         constexpr NarrowFn kNarrow[kShapes][kShapes] = {
-            //            Sphere         Capsule  AABB        Mesh
-            /* Sphere  */ {sphere_sphere, nullptr, sphere_box, nullptr},
-            /* Capsule */ {nullptr, nullptr, nullptr, nullptr},
-            /* AABB    */ {box_sphere, nullptr, box_box, nullptr},
+            //            Sphere          Capsule          AABB         Mesh
+            /* Sphere  */ {sphere_sphere, sphere_capsule, sphere_box, nullptr},
+            /* Capsule */ {capsule_sphere, capsule_capsule, capsule_box, nullptr},
+            /* AABB    */ {box_sphere, box_capsule, box_box, nullptr},
             /* Mesh    */ {nullptr, nullptr, nullptr, nullptr},
         };
 
@@ -255,8 +373,8 @@ namespace physics
         for (size_t i = 0; i < bodies_.size(); ++i)
             for (size_t j = i + 1; j < bodies_.size(); ++j)
             {
-                Body& a = bodies_[i];
-                Body& b = bodies_[j];
+                InternalPhysicsBody& a = bodies_[i];
+                InternalPhysicsBody& b = bodies_[j];
 
                 if (!(a.c->layer & b.c->mask) || !(b.c->layer & a.c->mask))
                     continue;
@@ -280,7 +398,7 @@ namespace physics
             }
     }
 
-    void PhysicsWorld::resolve(Body& a, Body& b, const ContactManifold& m)
+    void PhysicsWorld::resolve(InternalPhysicsBody& a, InternalPhysicsBody& b, const ContactManifold& m)
     {
         const float ia = inv_mass(a.rb), ib = inv_mass(b.rb);
         const float sum = ia + ib;

@@ -97,27 +97,24 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     playerCamera.angleSensitivity = 0.15f;
     engine.world().add<scene::Transform>(cam);
 
-    scene::Transform gt;
-    gt.scale = {40, 1, 40}; // match this to your plane primitive's size
-    var ground = scene::spawn_model(engine.world(), get_primitive(PrimitiveType::Plane, engine), gt);
-    var& gc = engine.world().add<physics::Collider>(ground);
-    gc.shape = physics::ShapeType::AABB;
-    gc.box.halfExtents = {20, 0.5f, 20};
-    gc.offset = {0, -0.5f, 0}; // visual plane at y=0, collision slab below it
-    gc.layer = L_Ground;
 
     engine.world().get<scene::Transform>(cam).position = {5, 5, 5};
     engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
 
-    var player = engine.world().create();
-    engine.world().add<scene::Transform>(player);
-    engine.world().add<Player>(player);
-    var& c = engine.world().add<physics::Collider>(player);
-    c.capsule.radius = 0.5f;
+    var playerEntity = engine.world().create();
+    var& playerTransform = engine.world().add<scene::Transform>(playerEntity);
+    playerTransform.position.y = 100.f;
+    var& player = engine.world().add<Player>(playerEntity);
+    player.moveSpeed = 15;
+
+    var& c = engine.world().add<physics::Collider>(playerEntity);
+    c.shape = physics::ShapeType::Capsule;
+    c.capsule.radius = 5.f;
     c.capsule.halfHeight = 1.f;
+    c.offset.y = c.capsule.halfHeight*2;
     c.layer = L_Player;
-    engine.world().add<physics::RigidBody>(player);
-    
+    engine.world().add<physics::RigidBody>(playerEntity);
+
     var& bfres = get_sarc_file(engine, "assets/Player.pack:Model/Player00.szs:Output.bfres")->bfres;
     var bfresModel = bfres->parse();
 
@@ -126,8 +123,18 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     playerModelHandle = engine.models().generate("plr", bfresModel.models[0]);
 
     var playerModel = scene::spawn_model(engine.world(), playerModelHandle);
-    engine.world().add<scene::Transform>(playerModel).position = {0,0.5f,0};
-    scene::attach(engine.world(),playerModel,player);
+    //engine.world().add<scene::Transform>(playerModel).scale = {1, 1, 1} * 4;
+    scene::attach(engine.world(),playerModel,playerEntity);
+
+    
+    scene::Transform gt;
+    gt.scale = {40, 1, 40}; // match this to your plane primitive's size
+    var ground = scene::spawn_model(engine.world(), get_primitive(PrimitiveType::Plane, engine), gt);
+    var& gc = engine.world().add<physics::Collider>(ground);
+    gc.shape = physics::ShapeType::AABB;
+    gc.box.halfExtents = {20, 0.5f, 20};
+    gc.offset = {0, -0.5f, 0}; // visual plane at y=0, collision slab below it
+    gc.layer = L_Ground;
 
 }
 
@@ -192,6 +199,22 @@ void MatchScene::on_update(GameCtrl& game, Engine& engine, float delta)
     if (engine.input().key_press(SDL_SCANCODE_ESCAPE))
         engine.input().toggle_mouse_captured();
 
+    if (engine.input().key_press(SDL_SCANCODE_F1))
+    {
+        var& w = engine.world();
+        var cam = w.view<graphics::Camera>().first();
+        if (cam != ecs::null_entity)
+        {
+            if (w.contains<FreeCam>(cam))
+            {
+                w.remove<FreeCam>(cam);
+                engine.input().set_mouse_captured(true); // back to the player camera's capture
+            }
+            else
+                w.add<FreeCam>(cam);
+        }
+    }
+
     free_cam(engine, delta);
     update_player(engine, delta);
     graphics::update_camera(engine);
@@ -207,14 +230,15 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
     scene::render_models(engine.world(), engine.models(), engine.renderer());
 
         // window 1: top-right immediate debug menu
-    updateDebugMenu(engine, delta);
+    debug::updateDebugMenu(engine, delta);
 
     ImGui::Begin("value tweaking");
     
-    var entity = engine.world().view<Player>().first();
-    var& component = engine.world().get<Player>(entity);
+    var entity = engine.world().view<physics::Collider>().first();
+    var& component = engine.world().get<physics::Collider>(entity);
 
-    ImGui::InputFloat("Move speed", &component.moveSpeed);
+    ImGui::InputFloat("radius", &component.capsule.radius);
+    ImGui::InputFloat("half", &component.capsule.halfHeight);
 
     ImGui::End();
 }

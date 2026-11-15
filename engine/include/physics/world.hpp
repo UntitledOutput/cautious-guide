@@ -6,6 +6,7 @@
 
 #include "core/ecs.hpp"
 #include "core/util.hpp"
+#include "math/matrix.hpp"
 #include "math/vector.hpp"
 
 namespace scene
@@ -63,6 +64,37 @@ namespace physics
         u32 layer = 1;
         u32 mask = ~0u;
         bool isTrigger = false;
+
+        math::mat4 matrix() const
+        {
+            // offset matrix applying the collider's offset and scale to the transform's matrix
+            var mat = math::translate(offset);
+
+            math::vec3 scale = {1,1,1};
+
+            switch (shape)
+            {
+
+                case ShapeType::Sphere:
+                    scale *= sphere.radius;
+                    break;
+                case ShapeType::Capsule:
+                    scale.y *= capsule.halfHeight*2;
+                    scale.x *= capsule.radius;
+                    scale.z *= capsule.radius;
+                    break;
+                case ShapeType::AABB:
+                    scale = box.halfExtents/2.f;
+                    break;
+                case ShapeType::Mesh:
+                    break;
+                case ShapeType::Count:
+                    break;
+            }
+
+            mat = mat * math::scale(scale);
+            return mat;
+        }
     };
 
     struct ContactManifold
@@ -138,6 +170,14 @@ namespace physics
         std::vector<Sub> subs_;
     };
 
+    struct InternalPhysicsBody
+    {
+        ecs::Entity e;
+        scene::Transform* t;
+        Collider* c;
+        RigidBody* rb;
+    };
+
     class PhysicsWorld
     {
     public:
@@ -150,21 +190,16 @@ namespace physics
 
         CollisionEvents& events() { return events_; }
 
+        std::vector<InternalPhysicsBody> bodies() const { return bodies_; }
+
     private:
-        struct Body
-        {
-            ecs::Entity e;
-            scene::Transform* t;
-            Collider* c;
-            RigidBody* rb;
-        };
 
         void gather(ecs::World& w);
         void integrate(float dt);
         void collide();
-        void resolve(Body& a, Body& b, const ContactManifold& m);
+        void resolve(InternalPhysicsBody& a, InternalPhysicsBody& b, const ContactManifold& m);
 
-        std::vector<Body> bodies_;
+        std::vector<InternalPhysicsBody> bodies_;
         ContactTracker tracker_;
         std::vector<CollisionEvent> pending_;
         CollisionEvents events_;

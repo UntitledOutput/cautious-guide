@@ -3,6 +3,7 @@
 #include <math/math.hpp>
 
 #include "core/components/transform.hpp"
+#include "debug/debug.hpp"
 
 void update_player(Engine& engine, float deltaTime)
 {
@@ -51,6 +52,10 @@ void update_player(Engine& engine, float deltaTime)
     engine.world().view<scene::Transform, PlayerCamera>().each(
         [&](ecs::Entity e, scene::Transform& wt, PlayerCamera& _cam)
         { 
+            if (engine.world().contains<FreeCam>(e))
+                return;
+
+
             if (engine.input().is_mouse_captured())
             {
                 float angle = engine.input().mouse_delta().x;

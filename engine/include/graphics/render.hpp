@@ -86,6 +86,11 @@ namespace graphics
             if (auto it = samplers.find(std::string(sampler)); it != samplers.end())
                 m.textures[it->second] = texture;
         }
+
+        void set_material_render_params(MaterialHandle h, RenderState state) { Material& m = materials[h];
+
+            m.state = state;
+        }
         
         void set_camera(const CameraData& cam) { camera_ = cam; }
 
