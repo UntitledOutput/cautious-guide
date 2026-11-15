@@ -163,13 +163,8 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
         // window 1: top-right immediate debug menu
     updateDebugMenu(engine, delta);
 
-        ImGui::Begin("physics test");
-    ImGui::Text("bodies: %d", int(_balls.size()));
-    ImGui::Text("ground hits: %d", _groundHits);
-    ImGui::SliderInt("count", &_ballCount, 1, 1000);
-    ImGui::SliderFloat("restitution", &_restitution, 0.0f, 1.0f);
-    if (ImGui::Button("respawn") || engine.input().key_down(SDL_SCANCODE_R))
-        spawn_balls(engine);
+    ImGui::Begin("physics test");
+
     ImGui::End();
 }
 

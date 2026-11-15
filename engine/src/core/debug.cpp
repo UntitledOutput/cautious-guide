@@ -7,7 +7,7 @@
 #include "engine.hpp"
 
 static bool isDebugMenuOpen = true;
-static bool drawWireframeModels = true;
+static bool drawWireframeModels = false;
 
 void updateDebugMenu(Engine& engine, float delta)
 {
