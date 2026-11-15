@@ -4,7 +4,7 @@
 
 struct Player
 {
-    
+    float moveSpeed = 3.0f;
 };
 
 struct PlayerCamera
@@ -16,6 +16,10 @@ struct PlayerCamera
     float edgeRadius = 4.f;
 
     float yLookOffset = 1.f;
+    float yScale = 1.f;
+
+    float angleSensitivity = 0.05f;
+    float ySensitivity = 0.2f;
 
     ecs::Entity player = ecs::null_entity;
 };

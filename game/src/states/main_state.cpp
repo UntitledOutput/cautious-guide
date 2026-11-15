@@ -1,5 +1,8 @@
 #include "states/main_state.hpp"
 
+#include <iostream>
+#include <ranges>
+
 #include "engine.hpp"
 #include "core/debug.hpp"
 #include "core/hierarchy.hpp"
@@ -10,6 +13,7 @@
 #include "scene/render_system.hpp"
 #include "states/state_base.hpp"
 #include "graphics/camera.hpp"
+#include "loaders/bfres/sarc.hpp"
 #include "scene/transform_system.hpp"
 
 
@@ -58,6 +62,24 @@ namespace
 #include <imgui.h>
 #include <random>
 
+const SarcFile* get_sarc_file(Engine& engine,std::string path)
+{ 
+    var splitPath = util::split(path, ':');
+    var main_path = splitPath[0];
+
+    var archive = (SarcArchive*)engine.filesystem().read_file_auto(main_path);
+
+    if (splitPath.size() == 3)
+    {
+        // theres a subfile
+        var& entrySzs = archive->find(splitPath[1])->archive;
+        return entrySzs->find(splitPath[2]);
+    } else
+    {
+        return archive->find(splitPath[1]);
+    }
+}
+
 void MatchScene::on_enter(GameCtrl& game, Engine& engine)
 {
     GameState::on_enter(game, engine);
@@ -67,7 +89,12 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
 
     var cam = engine.world().create();
     engine.world().add<graphics::Camera>(cam);
-    engine.world().add<PlayerCamera>(cam);
+    var& playerCamera = engine.world().add<PlayerCamera>(cam);
+    playerCamera.centerRadius = 30;
+    playerCamera.edgeRadius = 20;
+    playerCamera.yLookOffset = 10;
+    playerCamera.yScale = 20;
+    playerCamera.angleSensitivity = 0.15f;
     engine.world().add<scene::Transform>(cam);
 
     scene::Transform gt;
@@ -90,8 +117,15 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     c.capsule.halfHeight = 1.f;
     c.layer = L_Player;
     engine.world().add<physics::RigidBody>(player);
+    
+    var& bfres = get_sarc_file(engine, "assets/Player.pack:Model/Player00.szs:Output.bfres")->bfres;
+    var bfresModel = bfres->parse();
 
-    var playerModel = scene::spawn_model(engine.world(), get_primitive(PrimitiveType::Capsule, engine));
+    var playerModelHandle = engine.models().load("assets/models/tofu.glb");
+
+    playerModelHandle = engine.models().generate("plr", bfresModel.models[0]);
+
+    var playerModel = scene::spawn_model(engine.world(), playerModelHandle);
     engine.world().add<scene::Transform>(playerModel).position = {0,0.5f,0};
     scene::attach(engine.world(),playerModel,player);
 
@@ -174,4 +208,13 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
 
         // window 1: top-right immediate debug menu
     updateDebugMenu(engine, delta);
+
+    ImGui::Begin("value tweaking");
+    
+    var entity = engine.world().view<Player>().first();
+    var& component = engine.world().get<Player>(entity);
+
+    ImGui::InputFloat("Move speed", &component.moveSpeed);
+
+    ImGui::End();
 }

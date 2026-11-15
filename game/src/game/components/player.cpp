@@ -13,7 +13,8 @@ void update_player(Engine& engine, float deltaTime)
         { 
             var cameraEntity = engine.world().view<PlayerCamera>().first();
 
-            
+            var rot = wt.rotation;
+
             var moveAxis = engine.actions().axis2(engine.actions().find("move"));
 
             if (moveAxis.magnitude() > 0.1f )
@@ -37,9 +38,10 @@ void update_player(Engine& engine, float deltaTime)
 
             if (math::dot(move,move) > 0.0f)
             {
-                wt.rotation = math::look_rotation(move, math::vec3{0, 1, 0});
+                var r = math::look_rotation(move, math::vec3{0, 1, 0});
+                wt.rotation = math::slerp(rot, r, deltaTime * 5);
 
-                var add = move * 3.f * deltaTime;
+                var add = move * _player.moveSpeed * deltaTime;
 
                 wt.position += add;
             }
@@ -49,17 +51,17 @@ void update_player(Engine& engine, float deltaTime)
     engine.world().view<scene::Transform, PlayerCamera>().each(
         [&](ecs::Entity e, scene::Transform& wt, PlayerCamera& _cam)
         { 
-            if (!engine.input().is_mouse_captured())
-                return;
+            if (engine.input().is_mouse_captured())
+            {
+                float angle = engine.input().mouse_delta().x;
+                angle += engine.actions().axis2(engine.actions().find("look")).x;
+                _cam.angle -= (angle * 3.14) * deltaTime * _cam.angleSensitivity;
 
-            float angle = engine.input().mouse_delta().x;
-            angle += engine.actions().axis2(engine.actions().find("look")).x;
-            _cam.angle -= (angle * 3.14) * deltaTime * 0.05f;
-
-            float yV = engine.input().mouse_delta().y;
-            yV += engine.actions().axis2(engine.actions().find("look")).y;
-            _cam.yValue += (yV * 0.2f) * deltaTime;
-            _cam.yValue = std::clamp(_cam.yValue,0.f,1.f);
+                float yV = engine.input().mouse_delta().y;
+                yV += engine.actions().axis2(engine.actions().find("look")).y;
+                _cam.yValue += (yV * _cam.ySensitivity) * deltaTime;
+                _cam.yValue = std::clamp(_cam.yValue, 0.f, 1.f);
+            }
 
             var playerEntity = engine.world().view<Player>().first();
             var playerPosition = engine.world().get<scene::Transform>(playerEntity).position;
@@ -71,7 +73,7 @@ void update_player(Engine& engine, float deltaTime)
 
             offset *= math::lerp(_cam.centerRadius, _cam.edgeRadius, math::abs(_cam.yValue - 0.5f) * 2);
 
-            offset.y += (_cam.yValue);
+            offset.y += (_cam.yValue * _cam.yScale);
 
             offset += math::vec3{0, _cam.yValue, 0};
             wt.position = playerPosition + offset;

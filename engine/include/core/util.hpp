@@ -1,6 +1,9 @@
 #pragma once
 
 #include <string>
+#include <iostream>
+#include <vector>
+#include <sstream>
 
 #include <cstdint>
 
@@ -63,6 +66,20 @@ namespace util {
         buf += std::to_string(hasher(buf));
 
         return buf;
+    }
+
+    inline std::vector<std::string> split(const std::string& s, char delimiter)
+    {
+        std::vector<std::string> tokens;
+        std::string token;
+        std::istringstream tokenStream(s);
+
+        // getline extracts characters until it finds the delimiter
+        while (std::getline(tokenStream, token, delimiter))
+        {
+            tokens.push_back(token);
+        }
+        return tokens;
     }
 
 }
