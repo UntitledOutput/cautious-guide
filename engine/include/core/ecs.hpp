@@ -18,6 +18,11 @@ namespace ecs
         bool operator==(const Entity&) const = default;
     };
 
+    struct Name
+    {
+        std::string value;
+    };
+
     constexpr Entity null_entity{};
 
     namespace detail

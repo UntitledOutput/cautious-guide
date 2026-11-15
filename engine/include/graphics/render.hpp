@@ -11,6 +11,7 @@
 
 namespace graphics
 {
+    struct MeshData;
 
 
     using MeshHandle = u32;

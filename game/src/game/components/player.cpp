@@ -18,29 +18,29 @@ void update_player(Engine& engine, float deltaTime)
 
             var moveAxis = engine.actions().axis2(engine.actions().find("move"));
 
-            if (moveAxis.magnitude() > 0.1f )
+            if (moveAxis.magnitude() > 0.1f || true)
             {
                 // set the world forward to the camera forward
                 var camForward = engine.world().get<scene::Transform>(cameraEntity).forward();
                 camForward.y = 0;
                 camForward = math::normalize(camForward);
 
-                wt.rotation = math::look_rotation(camForward, math::vec3{0, 1, 0});
+                wt.rotation = math::look_rotation(-camForward, math::vec3{0, 1, 0});
             }
 
             var forward = wt.forward();
             var right = wt.right();
 
             var move = math::vec3{};
-            move += forward * moveAxis.y;
-            move -= right * moveAxis.x;
+            move -= forward * moveAxis.y;
+            move += right * moveAxis.x;
             move = math::normalize(move);
 
 
             if (math::dot(move,move) > 0.0f)
             {
                 var r = math::look_rotation(move, math::vec3{0, 1, 0});
-                wt.rotation = math::slerp(rot, r, deltaTime * 5);
+                //wt.rotation = math::slerp(rot, r, deltaTime * 5);
 
                 var add = move * _player.moveSpeed * deltaTime;
 

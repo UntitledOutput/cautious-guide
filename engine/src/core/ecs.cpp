@@ -10,7 +10,11 @@ ecs::Entity ecs::World::create()
     }
     const u32 idx = u32(generations.size());
     generations.push_back(0);
-    return {idx, 0};
+    Entity e = {idx, 0};
+
+    add<Name>(e, Name{"Entity " + std::to_string(idx)});
+
+    return e;
 }
 
 void ecs::World::destroy(Entity e)

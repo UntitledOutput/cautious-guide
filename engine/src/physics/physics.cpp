@@ -6,15 +6,23 @@
 #include <tuple>
 
 #include "core/components/transform.hpp"
+#include "graphics/model.hpp"
+#include "physics/geometry.hpp"
+#include "physics/contact.hpp"
 
 namespace physics
 {
     namespace
     {
+        using geo::Segment;
+        using geo::closest_between_segments;
+        using geo::closest_on_segment;
+
         struct ShapeView
         {
             math::vec3 center;
             const Collider* c;
+            const TriangleMesh* mesh = nullptr; // only set for mesh colliders
         };
 
         using NarrowFn = std::optional<ContactManifold> (*)(const ShapeView&, const ShapeView&);
@@ -66,68 +74,10 @@ namespace physics
         }
 
         // capsules are y-up segments, halfHeight is the straight part only
-        struct Segment
-        {
-            math::vec3 p0, p1;
-        };
-
         Segment capsule_segment(const ShapeView& s)
         {
             const math::vec3 up{0.0f, s.c->capsule.halfHeight, 0.0f};
             return {s.center - up, s.center + up};
-        }
-
-        math::vec3 closest_on_segment(const Segment& s, math::vec3 p)
-        {
-            const math::vec3 d = s.p1 - s.p0;
-            const float len2 = math::dot(d, d);
-            if (len2 < 1e-12f)
-                return s.p0;
-            const float t = std::clamp(math::dot(p - s.p0, d) / len2, 0.0f, 1.0f);
-            return s.p0 + d * t;
-        }
-
-        // ericson, real-time collision detection 5.1.9
-        void closest_between_segments(const Segment& s1, const Segment& s2, math::vec3& c1, math::vec3& c2)
-        {
-            const math::vec3 d1 = s1.p1 - s1.p0, d2 = s2.p1 - s2.p0, r = s1.p0 - s2.p0;
-            const float a = math::dot(d1, d1), e = math::dot(d2, d2), f = math::dot(d2, r);
-            constexpr float eps = 1e-12f;
-            float s = 0.0f, t = 0.0f;
-
-            if (a <= eps && e <= eps)
-            {
-                c1 = s1.p0;
-                c2 = s2.p0;
-                return;
-            }
-            if (a <= eps)
-                t = std::clamp(f / e, 0.0f, 1.0f);
-            else
-            {
-                const float c = math::dot(d1, r);
-                if (e <= eps)
-                    s = std::clamp(-c / a, 0.0f, 1.0f);
-                else
-                {
-                    const float b = math::dot(d1, d2);
-                    const float denom = a * e - b * b;
-                    s = denom > eps ? std::clamp((b * f - c * e) / denom, 0.0f, 1.0f) : 0.0f;
-                    t = (b * s + f) / e;
-                    if (t < 0.0f)
-                    {
-                        t = 0.0f;
-                        s = std::clamp(-c / a, 0.0f, 1.0f);
-                    }
-                    else if (t > 1.0f)
-                    {
-                        t = 1.0f;
-                        s = std::clamp((b - c) / a, 0.0f, 1.0f);
-                    }
-                }
-            }
-            c1 = s1.p0 + d1 * s;
-            c2 = s2.p0 + d2 * t;
         }
 
         std::optional<ContactManifold> sphere_sphere(const ShapeView& a, const ShapeView& b)
@@ -217,13 +167,54 @@ namespace physics
             return ContactManifold{a.center + d * 0.5f, n, best}; // point is approximate
         }
 
+        std::optional<ContactManifold> to_manifold(const std::optional<MeshHit>& h, const ShapeView& m, bool flip)
+        {
+            if (!h)
+                return std::nullopt;
+            ContactManifold out{h->point + m.center, flip ? -h->normal : h->normal, h->depth};
+            out.surface = m.mesh->attribute(h->triangle);
+            return out;
+        }
+
+        std::optional<ContactManifold> sphere_mesh(const ShapeView& s, const ShapeView& m)
+        {
+            if (!m.mesh)
+                return std::nullopt;
+            return to_manifold(m.mesh->collide_sphere(s.center - m.center, s.c->sphere.radius), m, false);
+        }
+
+        std::optional<ContactManifold> mesh_sphere(const ShapeView& m, const ShapeView& s)
+        {
+            if (!m.mesh)
+                return std::nullopt;
+            return to_manifold(m.mesh->collide_sphere(s.center - m.center, s.c->sphere.radius), m, true);
+        }
+
+        std::optional<ContactManifold> capsule_mesh(const ShapeView& cap, const ShapeView& m)
+        {
+            if (!m.mesh)
+                return std::nullopt;
+            const Segment seg = capsule_segment(cap);
+            return to_manifold(m.mesh->collide_capsule(seg.p0 - m.center, seg.p1 - m.center, cap.c->capsule.radius), m,
+                               false);
+        }
+
+        std::optional<ContactManifold> mesh_capsule(const ShapeView& m, const ShapeView& cap)
+        {
+            if (!m.mesh)
+                return std::nullopt;
+            const Segment seg = capsule_segment(cap);
+            return to_manifold(m.mesh->collide_capsule(seg.p0 - m.center, seg.p1 - m.center, cap.c->capsule.radius), m,
+                               true);
+        }
+
         constexpr size_t kShapes = size_t(ShapeType::Count);
         constexpr NarrowFn kNarrow[kShapes][kShapes] = {
             //            Sphere          Capsule          AABB         Mesh
-            /* Sphere  */ {sphere_sphere, sphere_capsule, sphere_box, nullptr},
-            /* Capsule */ {capsule_sphere, capsule_capsule, capsule_box, nullptr},
-            /* AABB    */ {box_sphere, box_capsule, box_box, nullptr},
-            /* Mesh    */ {nullptr, nullptr, nullptr, nullptr},
+            /* Sphere  */ {sphere_sphere,  sphere_capsule,  sphere_box,  sphere_mesh},
+            /* Capsule */ {capsule_sphere, capsule_capsule, capsule_box, capsule_mesh},
+            /* AABB    */ {box_sphere,     box_capsule,     box_box,     nullptr},
+            /* Mesh    */ {mesh_sphere,    mesh_capsule,    nullptr,     nullptr},
         };
 
         float inv_mass(const RigidBody* rb) { return rb && rb->type == RigidBody::Type::Dynamic ? rb->invMass : 0.0f; }
@@ -367,8 +358,29 @@ namespace physics
         }
     }
 
+    MeshId PhysicsWorld::create_mesh(std::vector<math::vec3> vertices, std::vector<u32> indices,
+                                     std::vector<u16> attributes)
+    {
+        meshes_.emplace_back(std::move(vertices), std::move(indices), std::move(attributes));
+        return MeshId(meshes_.size() - 1);
+    }
+
+    MeshId PhysicsWorld::create_mesh(graphics::MeshData mesh, float scale, std::vector<u16> attributes)
+    {
+        meshes_.emplace_back(TriangleMesh{mesh.positions, mesh.indices, attributes});
+        return MeshId(meshes_.size() - 1);
+    }
+
+    const TriangleMesh* PhysicsWorld::mesh(MeshId id) const { return id < meshes_.size() ? &meshes_[id] : nullptr; }
+
     void PhysicsWorld::collide()
     {
+        auto view_of = [this](const InternalPhysicsBody& b)
+        {
+            const bool isMesh = b.c->shape == ShapeType::Mesh;
+            return ShapeView{b.t->position + b.c->offset, b.c, isMesh ? mesh(b.c->mesh.id) : nullptr};
+        };
+
         // brute force for now, swap for a grid/BVH once counts grow
         for (size_t i = 0; i < bodies_.size(); ++i)
             for (size_t j = i + 1; j < bodies_.size(); ++j)
@@ -385,7 +397,7 @@ namespace physics
                 if (!fn)
                     continue;
 
-                const auto m = fn({a.t->position + a.c->offset, a.c}, {b.t->position + b.c->offset, b.c});
+                const auto m = fn(view_of(a), view_of(b));
                 if (!m)
                     continue;
 
@@ -393,8 +405,8 @@ namespace physics
                 if (!trigger)
                     resolve(a, b, *m);
 
-                tracker_.report(
-                    {a.e, b.e, a.c->layer, b.c->layer, ContactPhase::Stay, trigger, m->point, m->normal, m->depth});
+                tracker_.report({a.e, b.e, a.c->layer, b.c->layer, ContactPhase::Stay, trigger, m->point, m->normal,
+                                 m->depth, m->surface});
             }
     }
 
@@ -422,5 +434,21 @@ namespace physics
             a.rb->velocity -= m.normal * (j * ia);
         if (ib > 0.0f)
             b.rb->velocity += m.normal * (j * ib);
+
+        // coulomb friction, using velocities after the normal impulse
+        const math::vec3 rv = (b.rb ? b.rb->velocity : math::vec3{}) - (a.rb ? a.rb->velocity : math::vec3{});
+        const math::vec3 vt = rv - m.normal * math::dot(rv, m.normal);
+        const float vtLen = math::length(vt);
+        if (vtLen < 1e-6f)
+            return;
+
+        constexpr float kDefaultFriction = 0.5f; // for colliders without a body
+        const float mu = std::sqrt((a.rb ? a.rb->friction : kDefaultFriction) * (b.rb ? b.rb->friction : kDefaultFriction));
+        const float jt = std::min(vtLen / sum, mu * j);
+        const math::vec3 t = vt / vtLen;
+        if (ia > 0.0f)
+            a.rb->velocity += t * (jt * ia);
+        if (ib > 0.0f)
+            b.rb->velocity -= t * (jt * ib);
     }
 } // namespace physics

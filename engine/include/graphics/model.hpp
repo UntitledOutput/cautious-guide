@@ -12,6 +12,11 @@
 #include <variant>
 #include <vector>
 
+namespace physics
+{
+    using MeshId = u32;
+}
+
 namespace filesys
 {
     class FilesystemOperator;
@@ -162,9 +167,15 @@ namespace graphics
         std::vector<math::mat4> restWorld;
         std::vector<AnimationData> animations;
         std::vector<SkinData> skins;
+        std::vector<physics::MeshId> physics_meshes;
     };
 
     using MaterialResolver = std::function<MaterialHandle(const MaterialData&, std::span<const TextureHandle>)>;
+
+    struct ModelCacheSettings
+    {
+        bool generate_physics_meshes = false;
+    };
 
     class ModelCache
     {
@@ -180,6 +191,10 @@ namespace graphics
         const ModelAsset& get(ModelHandle h) ret(assets[h]);
         const ModelHandle find(std::string path);
 
+        void SetSettings(ModelCacheSettings& settings)
+        { this->settings = settings;
+        }
+
     private:
         ModelData read(const std::string& path);
         ModelData read(std::span<const byte> data, std::string ext);
@@ -192,6 +207,8 @@ namespace graphics
         std::vector<ModelAsset> assets;
         std::unordered_map<std::string, ModelHandle> byPath;
         std::unordered_map<std::string, TextureHandle> textureCache;
+
+        ModelCacheSettings settings;
     };
 
     void compute_node_world(std::span<const NodeData> nodes, std::span<math::mat4> out);

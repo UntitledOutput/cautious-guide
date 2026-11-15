@@ -32,6 +32,11 @@ void Input::begin_frame()
     mouseDelta = {};
     gyroSum = {};
     gyroSamples = 0;
+
+    keysPressed.fill(false);
+    keysReleased.fill(false);
+    mousePressed.fill(false);
+    mouseReleased.fill(false);
 }
 
 void Input::handle_event(const SDL_Event& e)
@@ -40,18 +45,38 @@ void Input::handle_event(const SDL_Event& e)
     {
         case SDL_KEYDOWN:
         case SDL_KEYUP:
-            if (e.key.keysym.scancode < keys.size())
             {
-                l_keys[e.key.keysym.scancode] = keys[e.key.keysym.scancode];
-                keys[e.key.keysym.scancode] = e.type == SDL_KEYDOWN;
+                if (e.key.repeat)
+                    break; // os key repeat isn't a new press
+
+                const auto sc = e.key.keysym.scancode;
+                if (sc >= keys.size())
+                    break;
+
+                const bool down = e.type == SDL_KEYDOWN;
+                if (down && !keys[sc])
+                    keysPressed[sc] = true;
+                if (!down && keys[sc])
+                    keysReleased[sc] = true;
+                keys[sc] = down;
+                break;
             }
-            break;
 
         case SDL_MOUSEBUTTONDOWN:
         case SDL_MOUSEBUTTONUP:
-            if (e.button.button < mouseButtons.size())
-                mouseButtons[e.button.button] = e.type == SDL_MOUSEBUTTONDOWN;
-            break;
+            {
+                const u8 b = e.button.button;
+                if (b >= mouseButtons.size())
+                    break;
+
+                const bool down = e.type == SDL_MOUSEBUTTONDOWN;
+                if (down && !mouseButtons[b])
+                    mousePressed[b] = true;
+                if (!down && mouseButtons[b])
+                    mouseReleased[b] = true;
+                mouseButtons[b] = down;
+                break;
+            }
 
         case SDL_MOUSEMOTION:
             mouseDelta.x += float(e.motion.xrel);

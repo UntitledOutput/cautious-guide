@@ -120,19 +120,21 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
 
     var playerModelHandle = engine.models().load("assets/models/tofu.glb");
     scene::Transform t{};
-    t.scale = math::vec3{1, 1, 1} * 6.0f;
+    t.scale = math::vec3{1, 1, 1} * 3.0f;
     var playerModel = scene::spawn_model(engine.world(), playerModelHandle, t);
     scene::attach(engine.world(),playerModel,playerEntity);
     playerMdl = playerModel;
     
+    var mapModelHandle = engine.models().load("assets/models/map.glb");
     scene::Transform gt;
-    gt.scale = {40, 1, 40}; // match this to your plane primitive's size
-    var ground = scene::spawn_model(engine.world(), get_primitive(PrimitiveType::Plane, engine), gt);
+    gt.scale *= 15;
+    var ground = scene::spawn_model(engine.world(), mapModelHandle, gt);
     var& gc = engine.world().add<physics::Collider>(ground);
-    gc.shape = physics::ShapeType::AABB;
-    gc.box.halfExtents = {20, 0.5f, 20};
-    gc.offset = {0, -0.5f, 0};
+    gc.shape = physics::ShapeType::Mesh;
+    gc.shape = physics::ShapeType::Mesh;
+    gc.mesh.id = engine.physics().create_mesh(engine.models().get(), 1.0f, {});
     gc.layer = L_Ground;
+    engine.world().get<ecs::Name>(ground).value = "Map";
 
 }
 
@@ -232,8 +234,9 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
 
     ImGui::Begin("value tweaking");
     
-    //var entity = engine.world().view<physics::Collider>().first();
-    var& component = engine.world().get<scene::Transform>(playerMdl);
+    var entity =
+        engine.world().view<ecs::Name>().find([](ecs::Entity, ecs::Name& n) { return n.value == "Map"; });
+    var& component = engine.world().get<scene::Transform>(entity);
 
     float s = component.scale.x;
 

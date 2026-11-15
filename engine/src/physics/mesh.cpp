@@ -1,0 +1,219 @@
+#include "physics/mesh.hpp"
+
+#include <algorithm>
+#include <cfloat>
+#include <cmath>
+#include <numeric>
+
+#include "physics/geometry.hpp"
+
+namespace physics
+{
+    using namespace geo;
+
+    namespace
+    {
+        constexpr u32 kLeafSize = 4;
+        constexpr int kMaxDepth = 30;
+        constexpr float kEps = 1e-6f;
+    }
+
+    TriangleMesh::TriangleMesh(std::vector<math::vec3> vertices, std::vector<u32> indices, std::vector<u16> attributes)
+        : vertices_(std::move(vertices)), indices_(std::move(indices)), attributes_(std::move(attributes))
+    {
+        indices_.resize(indices_.size() - indices_.size() % 3);
+        tris_.resize(triangle_count());
+        std::iota(tris_.begin(), tris_.end(), 0u);
+
+        if (tris_.empty())
+            return;
+        nodes_.reserve(tris_.size() * 2 / kLeafSize + 1);
+        nodes_.emplace_back();
+        build_node(0, 0, u32(tris_.size()), 0);
+    }
+
+    void TriangleMesh::corners(u32 tri, math::vec3& a, math::vec3& b, math::vec3& c) const
+    {
+        a = vertices_[indices_[tri * 3 + 0]];
+        b = vertices_[indices_[tri * 3 + 1]];
+        c = vertices_[indices_[tri * 3 + 2]];
+    }
+
+    void TriangleMesh::build_node(u32 node, u32 first, u32 count, int depth)
+    {
+        math::vec3 lo{FLT_MAX, FLT_MAX, FLT_MAX}, hi{-FLT_MAX, -FLT_MAX, -FLT_MAX};
+        math::vec3 clo = lo, chi = hi;
+        for (u32 i = first; i < first + count; ++i)
+        {
+            math::vec3 a, b, c;
+            corners(tris_[i], a, b, c);
+            lo = vmin(lo, vmin(a, vmin(b, c)));
+            hi = vmax(hi, vmax(a, vmax(b, c)));
+            const math::vec3 centroid = (a + b + c) / 3.0f;
+            clo = vmin(clo, centroid);
+            chi = vmax(chi, centroid);
+        }
+        nodes_[node].min = lo;
+        nodes_[node].max = hi;
+
+        const math::vec3 ext = chi - clo;
+        const int axis = ext.x > ext.y ? (ext.x > ext.z ? 0 : 2) : (ext.y > ext.z ? 1 : 2);
+        if (count <= kLeafSize || depth >= kMaxDepth || ext[axis] <= 0.0f)
+        {
+            nodes_[node].first = first;
+            nodes_[node].count = count;
+            return;
+        }
+
+        auto centroid = [&](u32 t)
+        {
+            math::vec3 a, b, c;
+            corners(t, a, b, c);
+            return a[axis] + b[axis] + c[axis];
+        };
+        const u32 mid = first + count / 2;
+        std::nth_element(tris_.begin() + first, tris_.begin() + mid, tris_.begin() + first + count,
+                         [&](u32 x, u32 y) { return centroid(x) < centroid(y); });
+
+        const u32 left = u32(nodes_.size());
+        nodes_.emplace_back();
+        nodes_.emplace_back();
+        nodes_[node].left = left; // re-index, emplace_back may have reallocated
+        build_node(left, first, mid - first, depth + 1);
+        build_node(left + 1, mid, first + count - mid, depth + 1);
+    }
+
+    template <typename Fn>
+    void TriangleMesh::query(math::vec3 lo, math::vec3 hi, Fn&& fn) const
+    {
+        if (nodes_.empty())
+            return;
+
+        u32 stack[kMaxDepth * 2 + 2];
+        int sp = 0;
+        stack[sp++] = 0;
+        while (sp > 0)
+        {
+            const Node& n = nodes_[stack[--sp]];
+            if (n.max.x < lo.x || n.min.x > hi.x || n.max.y < lo.y || n.min.y > hi.y || n.max.z < lo.z ||
+                n.min.z > hi.z)
+                continue;
+
+            if (n.count > 0)
+            {
+                for (u32 i = n.first; i < n.first + n.count; ++i)
+                    fn(tris_[i]);
+            }
+            else
+            {
+                stack[sp++] = n.left;
+                stack[sp++] = n.left + 1;
+            }
+        }
+    }
+
+    std::optional<MeshHit> TriangleMesh::collide_sphere(math::vec3 center, float radius) const
+    {
+        std::optional<MeshHit> best;
+        const math::vec3 r{radius, radius, radius};
+
+        query(center - r, center + r,
+              [&](u32 t)
+              {
+                  math::vec3 a, b, c;
+                  corners(t, a, b, c);
+                  math::vec3 n = math::cross(b - a, c - a);
+                  const float len = math::length(n);
+                  if (len < kEps)
+                      return;
+                  n = n / len;
+
+                  if (math::dot(center - a, n) < 0.0f)
+                      return; // behind the face
+
+                  const math::vec3 q = closest_on_triangle(center, a, b, c);
+                  const math::vec3 d = q - center;
+                  const float dist2 = math::dot(d, d);
+                  if (dist2 >= radius * radius)
+                      return;
+
+                  const float dist = std::sqrt(dist2);
+                  const float depth = radius - dist;
+                  if (!best || depth > best->depth)
+                      best = MeshHit{q, dist > kEps ? d / dist : -n, depth, t};
+              });
+        return best;
+    }
+
+    std::optional<MeshHit> TriangleMesh::collide_capsule(math::vec3 p0, math::vec3 p1, float radius) const
+    {
+        std::optional<MeshHit> best;
+        const math::vec3 r{radius, radius, radius};
+        const Segment seg{p0, p1};
+
+        auto consider = [&](const MeshHit& h)
+        {
+            if (!best || h.depth > best->depth)
+                best = h;
+        };
+
+        query(vmin(p0, p1) - r, vmax(p0, p1) + r,
+              [&](u32 t)
+              {
+                  math::vec3 a, b, c;
+                  corners(t, a, b, c);
+                  math::vec3 n = math::cross(b - a, c - a);
+                  const float len = math::length(n);
+                  if (len < kEps)
+                      return;
+                  n = n / len;
+
+                  const float s0 = math::dot(p0 - a, n), s1 = math::dot(p1 - a, n);
+                  if (s0 < 0.0f && s1 < 0.0f)
+                      return; // fully behind the face
+
+                  // segment passes through the triangle: push the buried end back out along the normal
+                  if ((s0 < 0.0f) != (s1 < 0.0f))
+                  {
+                      const math::vec3 x = p0 + (p1 - p0) * (s0 / (s0 - s1));
+                      const math::vec3 onTri = closest_on_triangle(x, a, b, c);
+                      if (math::dot(onTri - x, onTri - x) < kEps * kEps)
+                      {
+                          consider({x, -n, radius - std::min(s0, s1), t});
+                          return;
+                      }
+                  }
+
+                  // otherwise the closest pair is an endpoint vs the face or a triangle edge vs the segment
+                  math::vec3 bestSeg = p0, bestTri = closest_on_triangle(p0, a, b, c);
+                  float bestD2 = math::dot(bestTri - bestSeg, bestTri - bestSeg);
+
+                  auto test = [&](math::vec3 sp, math::vec3 tp)
+                  {
+                      const float d2 = math::dot(tp - sp, tp - sp);
+                      if (d2 < bestD2)
+                      {
+                          bestD2 = d2;
+                          bestSeg = sp;
+                          bestTri = tp;
+                      }
+                  };
+
+                  test(p1, closest_on_triangle(p1, a, b, c));
+                  const Segment edges[3] = {{a, b}, {b, c}, {c, a}};
+                  for (const Segment& e : edges)
+                  {
+                      math::vec3 cs, ce;
+                      closest_between_segments(seg, e, cs, ce);
+                      test(cs, ce);
+                  }
+
+                  if (bestD2 >= radius * radius)
+                      return;
+
+                  const float dist = std::sqrt(bestD2);
+                  consider({bestTri, dist > kEps ? (bestTri - bestSeg) / dist : -n, radius - dist, t});
+              });
+        return best;
+    }
+}

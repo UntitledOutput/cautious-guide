@@ -26,11 +26,13 @@ namespace input
 
         void begin_frame();                 // clear per-frame edges and deltas
         void handle_event(const SDL_Event& e);
+        bool key_down(u16 scancode) ret(keys[scancode]);
+        bool key_press(u16 scancode) ret(keysPressed[scancode]);
+        bool key_release(u16 scancode) ret(keysReleased[scancode]);
 
-        bool key_down(u16 scancode)  ret(keys[scancode]);
-        bool mouse_down(u8 button)  ret(mouseButtons[button]);
-
-        bool key_press(u16 scancode) ret(keys[scancode] && !l_keys[scancode]);
+        bool mouse_down(u8 button) ret(mouseButtons[button]);
+        bool mouse_press(u8 button) ret(mousePressed[button]);
+        bool mouse_release(u8 button) ret(mouseReleased[button]);
 
         math::vec2 mouse_delta()  ret(mouseDelta);
 
@@ -43,10 +45,8 @@ namespace input
         void open_pad(int deviceIndex);
         void close_pad();
 
-        std::array<bool, 512> keys{};
-        std::array<bool, 512> l_keys{};
-        std::array<bool, 8> mouseButtons{};
-        std::array<bool, 8> l_mouseButtons{};
+        std::array<bool, 512> keys{}, keysPressed{}, keysReleased{};
+        std::array<bool, 8> mouseButtons{}, mousePressed{}, mouseReleased{};
         math::vec2 mouseDelta{};
 
         SDL_GameController* pad = nullptr;

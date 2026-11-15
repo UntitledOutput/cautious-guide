@@ -98,6 +98,7 @@ ModelHandle ModelCache::load(const std::string& path)
     assets.push_back(upload(read(key)));
     const ModelHandle h = ModelHandle(assets.size() - 1);
     byPath.emplace(key, h);
+    settings = {};
     return h;
 }
 
@@ -112,6 +113,7 @@ ModelHandle ModelCache::load(std::string key,std::span<const byte> data, std::st
     assets.push_back(upload(read(data, ext)));
     const ModelHandle h = ModelHandle(assets.size() - 1);
     byPath.emplace(key, h);
+    settings = {};
     return h;
 }
 
@@ -126,6 +128,7 @@ ModelHandle ModelCache::generate(std::string key,const ModelData& data)
     assets.push_back(upload(data));
     const ModelHandle h = ModelHandle(assets.size() - 1);
     byPath.emplace(key, h);
+    settings = {};
     return h;
 }
 
@@ -216,7 +219,12 @@ ModelAsset ModelCache::upload(const ModelData& data)
     std::vector<MeshHandle> meshes;
     meshes.reserve(data.meshes.size());
     for (const MeshData& m : data.meshes)
+    {
         meshes.push_back(upload_mesh(renderer, m));
+
+        if (settings.generate_physics_meshes)
+            asset.physics_meshes.push_back()
+    }
 
     for (u32 ni = 0; ni < data.nodes.size(); ++ni)
         for (u32 mi : data.nodes[ni].meshes)
