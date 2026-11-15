@@ -80,6 +80,8 @@ const SarcFile* get_sarc_file(Engine& engine,std::string path)
     }
 }
 
+static ecs::Entity playerMdl;
+
 void MatchScene::on_enter(GameCtrl& game, Engine& engine)
 {
     GameState::on_enter(game, engine);
@@ -109,23 +111,23 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
 
     var& c = engine.world().add<physics::Collider>(playerEntity);
     c.shape = physics::ShapeType::Capsule;
-    c.capsule.radius = 5.f;
-    c.capsule.halfHeight = 1.f;
-    c.offset.y = c.capsule.halfHeight*2;
+    c.capsule.radius = 3.f;
+    c.capsule.halfHeight = 4.f;
+    c.offset.y = 7.f;
     c.layer = L_Player;
     engine.world().add<physics::RigidBody>(playerEntity);
 
-    var& bfres = get_sarc_file(engine, "assets/Player.pack:Model/Player00.szs:Output.bfres")->bfres;
-    var bfresModel = bfres->parse();
+    //var& bfres = get_sarc_file(engine, "assets/Player.pack:Model/Player00.szs:Output.bfres")->bfres;
+    //var bfresModel = bfres->parse();
 
     var playerModelHandle = engine.models().load("assets/models/tofu.glb");
 
-    playerModelHandle = engine.models().generate("plr", bfresModel.models[0]);
-
-    var playerModel = scene::spawn_model(engine.world(), playerModelHandle);
-    //engine.world().add<scene::Transform>(playerModel).scale = {1, 1, 1} * 4;
+    //playerModelHandle = engine.models().generate("plr", bfresModel.models[0]);
+    scene::Transform t{};
+    t.scale = {1, 1, 1} * 6;
+    var playerModel = scene::spawn_model(engine.world(), playerModelHandle,t);
     scene::attach(engine.world(),playerModel,playerEntity);
-
+    playerMdl = playerModel;
     
     scene::Transform gt;
     gt.scale = {40, 1, 40}; // match this to your plane primitive's size
@@ -234,11 +236,14 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
 
     ImGui::Begin("value tweaking");
     
-    var entity = engine.world().view<physics::Collider>().first();
-    var& component = engine.world().get<physics::Collider>(entity);
+    //var entity = engine.world().view<physics::Collider>().first();
+    var& component = engine.world().get<scene::Transform>(playerMdl);
 
-    ImGui::InputFloat("radius", &component.capsule.radius);
-    ImGui::InputFloat("half", &component.capsule.halfHeight);
+    float s = component.scale.x;
+
+    ImGui::InputFloat("scale", &s);
+
+    component.scale = {1, 1, 1} * s;
 
     ImGui::End();
 }
