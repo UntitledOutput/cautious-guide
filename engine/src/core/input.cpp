@@ -41,7 +41,10 @@ void Input::handle_event(const SDL_Event& e)
         case SDL_KEYDOWN:
         case SDL_KEYUP:
             if (e.key.keysym.scancode < keys.size())
+            {
+                l_keys[e.key.keysym.scancode] = keys[e.key.keysym.scancode];
                 keys[e.key.keysym.scancode] = e.type == SDL_KEYDOWN;
+            }
             break;
 
         case SDL_MOUSEBUTTONDOWN:
@@ -104,7 +107,16 @@ float Input::pad_axis(u8 axis) const
     return std::copysign((mag - stick_deadzone) / (1.0f - stick_deadzone), v);
 }
 
-void Input::set_mouse_captured(bool captured) { SDL_SetRelativeMouseMode(captured ? SDL_TRUE : SDL_FALSE); }
+void Input::set_mouse_captured(bool captured)
+{
+    SDL_SetRelativeMouseMode(captured ? SDL_TRUE : SDL_FALSE);
+    mouse_captured = captured;
+}
+
+void Input::toggle_mouse_captured()
+{
+    set_mouse_captured(!mouse_captured);
+}
 
 void Input::open_pad(int deviceIndex)
 {

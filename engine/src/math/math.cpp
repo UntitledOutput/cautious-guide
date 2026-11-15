@@ -2,6 +2,8 @@
 #include <cmath>
 #include "math/matrix.hpp"
 #include "math/quaternion.hpp"
+#include "math/vector.hpp"
+#include "math/math.hpp"
 
 namespace
 {
@@ -202,5 +204,7 @@ namespace math
                 -(z_far + z_near) / (z_far - z_near), 1.0f};
         return r;
     }
+
+
 
 } // namespace math

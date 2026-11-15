@@ -21,12 +21,17 @@ namespace input
         Input& operator=(const Input&) = delete;
 
         void set_mouse_captured(bool captured);
+        void toggle_mouse_captured();
+        bool is_mouse_captured() ret(mouse_captured)
 
         void begin_frame();                 // clear per-frame edges and deltas
         void handle_event(const SDL_Event& e);
 
         bool key_down(u16 scancode)  ret(keys[scancode]);
         bool mouse_down(u8 button)  ret(mouseButtons[button]);
+
+        bool key_press(u16 scancode) ret(keys[scancode] && !l_keys[scancode]);
+
         math::vec2 mouse_delta()  ret(mouseDelta);
 
         bool pad_down(u8 button) const;
@@ -39,13 +44,17 @@ namespace input
         void close_pad();
 
         std::array<bool, 512> keys{};
+        std::array<bool, 512> l_keys{};
         std::array<bool, 8> mouseButtons{};
+        std::array<bool, 8> l_mouseButtons{};
         math::vec2 mouseDelta{};
 
         SDL_GameController* pad = nullptr;
         math::vec3 gyroRate{};
         math::vec3 gyroSum{};
         u32 gyroSamples = 0;
+
+        bool mouse_captured = false;
     };
 
     using ActionId = u16;

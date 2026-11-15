@@ -2,6 +2,7 @@
 
 #include "engine.hpp"
 #include "core/debug.hpp"
+#include "core/hierarchy.hpp"
 #include "debug/debug.hpp"
 #include "game/game.hpp"
 #include "game/components/player.hpp"
@@ -62,6 +63,8 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     GameState::on_enter(game, engine);
     engine.physics().events().clear();
 
+    engine.input().set_mouse_captured(true);
+
     var cam = engine.world().create();
     engine.world().add<graphics::Camera>(cam);
     engine.world().add<PlayerCamera>(cam);
@@ -79,13 +82,18 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     engine.world().get<scene::Transform>(cam).position = {5, 5, 5};
     engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
 
-    var player = scene::spawn_model(engine.world(), get_primitive(PrimitiveType::Capsule, engine));
+    var player = engine.world().create();
+    engine.world().add<scene::Transform>(player);
     engine.world().add<Player>(player);
     var& c = engine.world().add<physics::Collider>(player);
     c.capsule.radius = 0.5f;
     c.capsule.halfHeight = 1.f;
     c.layer = L_Player;
     engine.world().add<physics::RigidBody>(player);
+
+    var playerModel = scene::spawn_model(engine.world(), get_primitive(PrimitiveType::Capsule, engine));
+    engine.world().add<scene::Transform>(playerModel).position = {0,0.5f,0};
+    scene::attach(engine.world(),playerModel,player);
 
 }
 
@@ -147,6 +155,9 @@ void free_cam(Engine& engine, float dt)
 
 void MatchScene::on_update(GameCtrl& game, Engine& engine, float delta)
 {
+    if (engine.input().key_press(SDL_SCANCODE_ESCAPE))
+        engine.input().toggle_mouse_captured();
+
     free_cam(engine, delta);
     update_player(engine, delta);
     graphics::update_camera(engine);
@@ -163,8 +174,4 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
 
         // window 1: top-right immediate debug menu
     updateDebugMenu(engine, delta);
-
-    ImGui::Begin("physics test");
-
-    ImGui::End();
 }

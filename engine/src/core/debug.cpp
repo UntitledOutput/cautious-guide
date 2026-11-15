@@ -11,7 +11,7 @@ static bool drawWireframeModels = false;
 
 void updateDebugMenu(Engine& engine, float delta)
 {
-	if (engine.input().key_down(SDL_SCANCODE_APOSTROPHE))
+	if (engine.input().key_press(SDL_SCANCODE_APOSTROPHE))
         isDebugMenuOpen = !isDebugMenuOpen;
 
 	if (isDebugMenuOpen)

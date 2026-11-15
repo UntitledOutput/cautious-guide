@@ -10,12 +10,12 @@ struct Player
 struct PlayerCamera
 {
     float angle;
-    float yValue;
+    float yValue = 0.75f;
 
-    float centerRadius = 3.f;
-    float edgeRadius = 2.f;
+    float centerRadius = 5.f;
+    float edgeRadius = 4.f;
 
-    float yLookOffset;
+    float yLookOffset = 1.f;
 
     ecs::Entity player = ecs::null_entity;
 };

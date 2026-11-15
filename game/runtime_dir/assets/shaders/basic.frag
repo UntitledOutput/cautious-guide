@@ -13,5 +13,7 @@ void main()
 {
     float light = max(dot(normalize(vNormal), normalize(vec3(0.4, 1.0, 0.3))), 0.0) * 0.8 + 0.2;
     vec4 albedo = texture(_a0, vUV);
-    FragColor = vec4(albedo.rgb * light, albedo.a);
+    //FragColor = vec4(albedo.rgb * light, albedo.a);
+
+    FragColor = vec4(vUV, 0.0, 1.0);
 }

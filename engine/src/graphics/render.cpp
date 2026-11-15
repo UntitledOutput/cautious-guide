@@ -58,6 +58,20 @@ namespace
         glShaderSource(shader, 1, &src, NULL);
         glCompileShader(shader);
 
+        GLint ok = 0;
+        glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+        if (!ok)
+        {
+            GLint len = 0;
+            glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
+            std::string log(size_t(std::max(len, 1)), '\0');
+            glGetShaderInfoLog(shader, len, nullptr, log.data());
+           throw_error(std::format("[shader] %s compile failed:\n%s\n",
+                         type == GL_VERTEX_SHADER         ? "vertex"
+                             : type == GL_FRAGMENT_SHADER ? "fragment"
+                                                          : "compute",
+                         log.c_str()));
+        }
         return shader;
     }
 
@@ -69,9 +83,24 @@ namespace
         }
 
         glLinkProgram(program);
+
+        
+        GLint ok = 0;
+        glGetProgramiv(program, GL_LINK_STATUS, &ok);
+        if (!ok)
+        {
+            GLint len = 0;
+            glGetProgramiv(program, GL_INFO_LOG_LENGTH, &len);
+            std::string log(size_t(std::max(len, 1)), '\0');
+            glGetProgramInfoLog(program, len, nullptr, log.data());
+            throw_error(std::format("[shader] link failed:\n{}\n", log.c_str()));
+        }
+
         for (int i = 0; i < shader_count; i++) {
             glDeleteShader(shaders[i]);
         }
+
+
         return program;
     }
 
