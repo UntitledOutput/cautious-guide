@@ -117,15 +117,11 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     c.layer = L_Player;
     engine.world().add<physics::RigidBody>(playerEntity);
 
-    //var& bfres = get_sarc_file(engine, "assets/Player.pack:Model/Player00.szs:Output.bfres")->bfres;
-    //var bfresModel = bfres->parse();
 
     var playerModelHandle = engine.models().load("assets/models/tofu.glb");
-
-    //playerModelHandle = engine.models().generate("plr", bfresModel.models[0]);
     scene::Transform t{};
-    t.scale = {1, 1, 1} * 6;
-    var playerModel = scene::spawn_model(engine.world(), playerModelHandle,t);
+    t.scale = math::vec3{1, 1, 1} * 6.0f;
+    var playerModel = scene::spawn_model(engine.world(), playerModelHandle, t);
     scene::attach(engine.world(),playerModel,playerEntity);
     playerMdl = playerModel;
     
@@ -135,7 +131,7 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     var& gc = engine.world().add<physics::Collider>(ground);
     gc.shape = physics::ShapeType::AABB;
     gc.box.halfExtents = {20, 0.5f, 20};
-    gc.offset = {0, -0.5f, 0}; // visual plane at y=0, collision slab below it
+    gc.offset = {0, -0.5f, 0};
     gc.layer = L_Ground;
 
 }
@@ -243,7 +239,7 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
 
     ImGui::InputFloat("scale", &s);
 
-    component.scale = {1, 1, 1} * s;
+    component.scale = math::vec3{1, 1, 1} * s;
 
     ImGui::End();
 }
