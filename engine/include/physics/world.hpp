@@ -116,8 +116,6 @@ namespace physics
         RigidBody* rb;
     };
 
-    using MeshId = u32;
-
     class PhysicsWorld
     {
     public:
@@ -130,14 +128,22 @@ namespace physics
 
         CollisionEvents& events() { return events_; }
 
-        MeshId create_mesh(std::vector<math::vec3> vertices, std::vector<u32> indices, std::vector<u16> attributes = {});
-        MeshId create_mesh(graphics::MeshData mesh,math::vec3 scale, std::vector<u16> attributes = {});
-        const TriangleMesh* mesh(MeshId id) const;
+        explicit PhysicsWorld(std::shared_ptr<MeshCache> meshes = std::make_shared<MeshCache>()) :
+            meshes_(std::move(meshes))
+        {
+        }
+
+        MeshId create_mesh(std::vector<math::vec3> vertices, std::vector<u32> indices, std::vector<u16> attributes = {})
+        {
+            return meshes_->add(std::move(vertices), std::move(indices), std::move(attributes));
+        }
+        const TriangleMesh* mesh(MeshId id) const { return meshes_->get(id); }
+        MeshCache& meshes() { return *meshes_; }
         
         std::vector<InternalPhysicsBody> bodies() const { return bodies_; }
 
     private:
-        std::vector<TriangleMesh> meshes_;
+        std::shared_ptr<MeshCache> meshes_;
 
         void gather(ecs::World& w);
         void integrate(float dt);

@@ -12,11 +12,6 @@
 #include <variant>
 #include <vector>
 
-namespace physics
-{
-    using MeshId = u32;
-}
-
 namespace filesys
 {
     class FilesystemOperator;
@@ -133,6 +128,15 @@ namespace graphics
         std::vector<SkinData> skins;
     };
 
+        struct CollisionGeometry
+    {
+        std::vector<math::vec3> positions;
+        std::vector<u32> indices;
+    };
+
+    std::shared_ptr<const CollisionGeometry> build_collision_geometry(const ModelData& data,
+                                                                      std::span<const math::mat4> nodeWorld);
+
     struct LoadContext
     {
         std::string baseDir;
@@ -167,14 +171,14 @@ namespace graphics
         std::vector<math::mat4> restWorld;
         std::vector<AnimationData> animations;
         std::vector<SkinData> skins;
-        std::vector<physics::MeshId> physics_meshes;
+        std::shared_ptr<const CollisionGeometry> collision;
     };
 
     using MaterialResolver = std::function<MaterialHandle(const MaterialData&, std::span<const TextureHandle>)>;
 
     struct ModelCacheSettings
     {
-        bool generate_physics_meshes = false;
+        bool keepCollisionGeometry = true;
     };
 
     class ModelCache

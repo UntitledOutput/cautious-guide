@@ -6,6 +6,7 @@
 #include <numeric>
 
 #include "physics/geometry.hpp"
+#include "graphics/model.hpp"
 
 namespace physics
 {
@@ -216,4 +217,58 @@ namespace physics
               });
         return best;
     }
+
+        MeshId MeshCache::add(std::vector<math::vec3> vertices, std::vector<u32> indices, std::vector<u16> attributes)
+    {
+        meshes_.push_back(
+            std::make_unique<TriangleMesh>(std::move(vertices), std::move(indices), std::move(attributes)));
+        return MeshId(meshes_.size() - 1);
+    }
 }
+
+namespace graphics
+{
+    namespace
+    {
+        float det3(const math::mat4& m)
+        {
+            const math::vec3 x{m[0].x, m[0].y, m[0].z}, y{m[1].x, m[1].y, m[1].z}, z{m[2].x, m[2].y, m[2].z};
+            return math::dot(math::cross(x, y), z);
+        }
+    } // namespace
+
+    std::shared_ptr<const CollisionGeometry> build_collision_geometry(const ModelData& data,
+                                                                      std::span<const math::mat4> nodeWorld)
+    {
+        auto geo = std::make_shared<CollisionGeometry>();
+
+        for (u32 ni = 0; ni < data.nodes.size(); ++ni)
+        {
+            const NodeData& node = data.nodes[ni];
+            if (node.skin >= 0)
+                continue; // skinned meshes deform, they don't belong in static collision
+
+            const math::mat4& m = nodeWorld[ni];
+            const bool mirrored = det3(m) < 0.0f; // negative scale flips the winding
+
+            for (u32 mi : node.meshes)
+            {
+                const MeshData& mesh = data.meshes[mi];
+                const u32 base = u32(geo->positions.size());
+
+                for (const math::vec3& p : mesh.positions)
+                    geo->positions.push_back(math::transform_point(m, p));
+
+                for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
+                {
+                    const u32 a = base + mesh.indices[i], b = base + mesh.indices[i + 1],
+                              c = base + mesh.indices[i + 2];
+                    geo->indices.push_back(a);
+                    geo->indices.push_back(mirrored ? c : b);
+                    geo->indices.push_back(mirrored ? b : c);
+                }
+            }
+        }
+        return geo;
+    }
+} // namespace graphics

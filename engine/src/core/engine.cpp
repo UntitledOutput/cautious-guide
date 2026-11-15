@@ -35,8 +35,6 @@ Engine::Engine(EngineConfiguration cfg) : _cfg(std::move(cfg)), _window(std::mak
     _models = std::make_unique<graphics::ModelCache>(*_renderMgr, *_filesystem);
     _models->add_loader(graphics::make_gltf_loader());
 
-    _physics = std::make_unique<physics::PhysicsWorld>();
-
     regen_world();
 }
 
@@ -87,15 +85,32 @@ int Engine::start(GameCtrl& game)
 
 void Engine::regen_world()
 {
-    if (_world)
-    {
-        // clear world memory
-        _world = nullptr;
-    }
-
     _world = std::make_unique<ecs::World>();
-    _physics.reset();
-    _physics = std::make_unique<physics::PhysicsWorld>();
+    _physics = std::make_unique<physics::PhysicsWorld>(_physicsMeshes);
+}
+
+physics::MeshId Engine::collision_mesh(graphics::ModelHandle model, math::vec3 scale)
+{
+    const auto key = std::make_tuple(model, scale.x, scale.y, scale.z);
+    if (auto it = _modelColliders.find(key); it != _modelColliders.end())
+        return it->second;
+
+    const auto& asset = _models->get(model);
+    if (!asset.collision)
+        throw_error("model was loaded with keepCollisionGeometry off");
+
+    std::vector<math::vec3> verts = asset.collision->positions;
+    for (auto& v : verts)
+        v = v * scale;
+
+    std::vector<u32> idx = asset.collision->indices;
+    if (scale.x * scale.y * scale.z < 0.0f)
+        for (size_t i = 0; i + 2 < idx.size(); i += 3)
+            std::swap(idx[i + 1], idx[i + 2]);
+
+    const auto id = _physicsMeshes->add(std::move(verts), std::move(idx));
+    _modelColliders.emplace(key, id);
+    return id;
 }
 
 Engine::SDLContext::SDLContext()

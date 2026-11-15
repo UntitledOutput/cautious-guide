@@ -221,9 +221,6 @@ ModelAsset ModelCache::upload(const ModelData& data)
     for (const MeshData& m : data.meshes)
     {
         meshes.push_back(upload_mesh(renderer, m));
-
-        if (settings.generate_physics_meshes)
-            asset.physics_meshes.push_back()
     }
 
     for (u32 ni = 0; ni < data.nodes.size(); ++ni)
@@ -251,6 +248,9 @@ ModelAsset ModelCache::upload(const ModelData& data)
     asset.skins = data.skins;
     asset.restWorld.resize(asset.nodes.size());
     compute_node_world(asset.nodes, asset.restWorld);
+
+    if (settings.keepCollisionGeometry)
+        asset.collision = build_collision_geometry(data, asset.restWorld);
     return asset;
 }
 

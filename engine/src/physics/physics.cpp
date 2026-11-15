@@ -358,21 +358,6 @@ namespace physics
         }
     }
 
-    MeshId PhysicsWorld::create_mesh(std::vector<math::vec3> vertices, std::vector<u32> indices,
-                                     std::vector<u16> attributes)
-    {
-        meshes_.emplace_back(std::move(vertices), std::move(indices), std::move(attributes));
-        return MeshId(meshes_.size() - 1);
-    }
-
-    MeshId PhysicsWorld::create_mesh(graphics::MeshData mesh, float scale, std::vector<u16> attributes)
-    {
-        meshes_.emplace_back(TriangleMesh{mesh.positions, mesh.indices, attributes});
-        return MeshId(meshes_.size() - 1);
-    }
-
-    const TriangleMesh* PhysicsWorld::mesh(MeshId id) const { return id < meshes_.size() ? &meshes_[id] : nullptr; }
-
     void PhysicsWorld::collide()
     {
         auto view_of = [this](const InternalPhysicsBody& b)

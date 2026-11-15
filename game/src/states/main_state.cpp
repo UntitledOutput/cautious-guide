@@ -107,7 +107,7 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     var& playerTransform = engine.world().add<scene::Transform>(playerEntity);
     playerTransform.position.y = 100.f;
     var& player = engine.world().add<Player>(playerEntity);
-    player.moveSpeed = 15;
+    player.moveSpeed = 25;
 
     var& c = engine.world().add<physics::Collider>(playerEntity);
     c.shape = physics::ShapeType::Capsule;
@@ -127,12 +127,12 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     
     var mapModelHandle = engine.models().load("assets/models/map.glb");
     scene::Transform gt;
-    gt.scale *= 15;
+    gt.scale *= 20;
     var ground = scene::spawn_model(engine.world(), mapModelHandle, gt);
     var& gc = engine.world().add<physics::Collider>(ground);
     gc.shape = physics::ShapeType::Mesh;
     gc.shape = physics::ShapeType::Mesh;
-    gc.mesh.id = engine.physics().create_mesh(engine.models().get(), 1.0f, {});
+    gc.mesh.id = engine.collision_mesh(mapModelHandle,gt.scale);
     gc.layer = L_Ground;
     engine.world().get<ecs::Name>(ground).value = "Map";
 

@@ -7,6 +7,9 @@
 
 namespace physics
 {
+    using MeshId = u32;
+    constexpr MeshId invalid_mesh = UINT32_MAX;
+
     struct MeshHit
     {
         math::vec3 point, normal; // normal points from the shape into the mesh
@@ -50,5 +53,17 @@ namespace physics
         std::vector<u16> attributes_;
         std::vector<Node> nodes_;
         std::vector<u32> tris_;
+    };
+
+    class MeshCache
+    {
+    public:
+        MeshId add(std::vector<math::vec3> vertices, std::vector<u32> indices, std::vector<u16> attributes = {});
+        const TriangleMesh* get(MeshId id) const { return id < meshes_.size() ? meshes_[id].get() : nullptr; }
+
+        size_t size() const { return meshes_.size(); }
+
+    private:
+        std::vector<std::unique_ptr<TriangleMesh>> meshes_;
     };
 }

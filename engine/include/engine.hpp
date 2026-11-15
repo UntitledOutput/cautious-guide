@@ -2,6 +2,7 @@
 #define ENGINE_HPP
 
 
+#include <map>
 #include <memory>
 
 
@@ -13,6 +14,7 @@
 #include <core/file.hpp>
 
 #include "core/input.hpp"
+#include "graphics/model.hpp"
 #include "physics/world.hpp"
 
 namespace graphics
@@ -69,6 +71,8 @@ public:
 
     int frame_count() ret(_frame_count);
 
+    physics::MeshId collision_mesh(graphics::ModelHandle model, math::vec3 scale = {1, 1, 1});
+
 private:
 
     void setup_file_operators();
@@ -94,6 +98,8 @@ private:
     std::unique_ptr<graphics::ModelCache> _models;
     std::unique_ptr<ecs::World> _world;
     std::unique_ptr<physics::PhysicsWorld> _physics = std::make_unique<physics::PhysicsWorld>();
+    std::shared_ptr<physics::MeshCache> _physicsMeshes = std::make_shared<physics::MeshCache>();
+    std::map<std::tuple<graphics::ModelHandle, float, float, float>, physics::MeshId> _modelColliders;
 
 
     int _frame_count = 0;
