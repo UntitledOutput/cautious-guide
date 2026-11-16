@@ -17,6 +17,14 @@ namespace physics
         u32 triangle;
     };
 
+    struct MeshCastHit
+    {
+        float t; // distance travelled along the ray
+        math::vec3 point, normal;
+        u32 triangle;
+        math::vec3 barycentric; // weights for the triangle's 3 corners, for uv lookups
+    };
+
     // static triangle soup with a bvh, triangles are one sided (ccw = front)
     class TriangleMesh
     {
@@ -31,6 +39,9 @@ namespace physics
         // positions are in mesh space, deepest contact wins
         std::optional<MeshHit> collide_sphere(math::vec3 center, float radius) const;
         std::optional<MeshHit> collide_capsule(math::vec3 p0, math::vec3 p1, float radius) const;
+
+                // radius 0 is a plain raycast. dir must be unit length, front faces only
+        std::optional<MeshCastHit> cast(math::vec3 origin, math::vec3 dir, float radius, float maxDist) const;
 
     private:
         struct Node

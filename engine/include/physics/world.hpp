@@ -116,6 +116,24 @@ namespace physics
         RigidBody* rb;
     };
 
+    struct CastHit
+    {
+        ecs::Entity entity;
+        math::vec3 point; // where the surface was touched
+        math::vec3 normal; // surface normal at the touch, facing the caster
+        float distance; // how far the ray / sphere center travelled
+        u16 surface = 0; // mesh triangle attribute
+        u32 triangle = UINT32_MAX;
+        math::vec3 barycentric{}; // mesh hits only
+    };
+
+    struct CastFilter
+    {
+        u32 mask = ~0u; // layers to hit
+        ecs::Entity ignore = ecs::null_entity;
+        bool hitTriggers = false;
+    };
+
     class PhysicsWorld
     {
     public:
@@ -142,6 +160,12 @@ namespace physics
         
         std::vector<InternalPhysicsBody> bodies() const { return bodies_; }
 
+                // casts read the ecs directly so they're safe to call any time. shapes the cast starts inside are skipped
+        std::optional<CastHit> raycast(ecs::World& w, math::vec3 origin, math::vec3 dir, float maxDist,
+                                       const CastFilter& filter = {}) const;
+        std::optional<CastHit> sphere_cast(ecs::World& w, math::vec3 origin, float radius, math::vec3 dir,
+                                           float maxDist, const CastFilter& filter = {}) const;
+
     private:
         std::shared_ptr<MeshCache> meshes_;
 
@@ -149,6 +173,9 @@ namespace physics
         void integrate(float dt);
         void collide();
         void resolve(InternalPhysicsBody& a, InternalPhysicsBody& b, const ContactManifold& m);
+
+                std::optional<CastHit> cast(ecs::World& w, math::vec3 origin, float radius, math::vec3 dir, float maxDist,
+                                    const CastFilter& filter) const;
 
         std::vector<InternalPhysicsBody> bodies_;
         ContactTracker tracker_;

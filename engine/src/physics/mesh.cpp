@@ -218,7 +218,85 @@ namespace physics
         return best;
     }
 
-        MeshId MeshCache::add(std::vector<math::vec3> vertices, std::vector<u32> indices, std::vector<u16> attributes)
+    std::optional<MeshCastHit> TriangleMesh::cast(math::vec3 o, math::vec3 dir, float radius, float maxDist) const
+    {
+        if (nodes_.empty())
+            return std::nullopt;
+
+        std::optional<MeshCastHit> best;
+        float bestT = maxDist;
+        const math::vec3 pad{radius, radius, radius};
+
+        auto test_triangle = [&](u32 t)
+        {
+            math::vec3 a, b, c;
+            corners(t, a, b, c);
+            math::vec3 n = math::cross(b - a, c - a);
+            const float len = math::length(n);
+            if (len < kEps)
+                return;
+            n = n / len;
+
+            const float dn = math::dot(dir, n);
+            const float s0 = math::dot(o - a, n);
+            if (dn >= 0.0f || s0 < 0.0f)
+                return; // moving away, parallel, or behind the face
+
+            // face: first touch is when the center is radius above the plane
+            const float tf = (s0 - radius) / -dn;
+            if (tf >= 0.0f && tf <= bestT)
+            {
+                const math::vec3 contact = o + dir * tf - n * radius;
+                const math::vec3 bc = barycentric(contact, a, b, c);
+                if (bc.x >= -1e-5f && bc.y >= -1e-5f && bc.z >= -1e-5f)
+                {
+                    bestT = tf;
+                    best = MeshCastHit{tf, contact, n, t, bc};
+                    return; // nothing on this triangle can be hit earlier
+                }
+            }
+
+            if (radius <= 0.0f)
+                return;
+
+            // edges and corners
+            const Segment edges[3] = {{a, b}, {b, c}, {c, a}};
+            for (const Segment& e : edges)
+                if (const auto h = ray_capsule(o, dir, bestT, e.p0, e.p1, radius))
+                {
+                    const math::vec3 center = o + dir * h->t;
+                    const math::vec3 contact = closest_on_segment(e, center);
+                    bestT = h->t;
+                    best = MeshCastHit{h->t, contact, h->normal, t, barycentric(contact, a, b, c)};
+                }
+        };
+
+        u32 stack[kMaxDepth * 2 + 2];
+        int sp = 0;
+        stack[sp++] = 0;
+        while (sp > 0)
+        {
+            const Node& node = nodes_[stack[--sp]];
+            const math::vec3 lo = node.min - pad, hi = node.max + pad;
+            const bool inside = o.x >= lo.x && o.y >= lo.y && o.z >= lo.z && o.x <= hi.x && o.y <= hi.y && o.z <= hi.z;
+            if (!inside && !ray_aabb(o, dir, bestT, lo, hi))
+                continue;
+
+            if (node.count > 0)
+            {
+                for (u32 i = node.first; i < node.first + node.count; ++i)
+                    test_triangle(tris_[i]);
+            }
+            else
+            {
+                stack[sp++] = node.left;
+                stack[sp++] = node.left + 1;
+            }
+        }
+        return best;
+    }
+
+    MeshId MeshCache::add(std::vector<math::vec3> vertices, std::vector<u32> indices, std::vector<u16> attributes)
     {
         meshes_.push_back(
             std::make_unique<TriangleMesh>(std::move(vertices), std::move(indices), std::move(attributes)));
