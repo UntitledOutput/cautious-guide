@@ -30,7 +30,14 @@ namespace graphics
     {
         std::string vertexSource;
         std::string fragmentSource;
+    };
+
+    struct ComputeShaderDescriptor
+    {
         std::string computeSource;
+        math::vec3 elementSize;
+
+        size_t initialBufferSize;
     };
 
     struct TextureDescriptor
@@ -128,6 +135,12 @@ namespace graphics
         {
             VertexFormat fmt;
             u32 base_vtx, first_idx, idx;
+        };
+
+        struct GpuComputeShader
+        {
+            u32 ssbo;
+            size_t dataSize;
         };
 
         FormatPool& get_pool(VertexFormat fmt);
