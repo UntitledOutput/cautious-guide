@@ -34,7 +34,7 @@ namespace graphics
     constexpr BufferUsage operator|(BufferUsage a, BufferUsage b) { return BufferUsage(u32(a) | u32(b)); };
     constexpr BufferUsage operator&(BufferUsage a, BufferUsage b) { return BufferUsage(u32(a) & u32(b)); };
 
-    enum Access {
+    enum class Access : u32 {
         Read = 0,
         Write = 1,
         ReadWrite = 2
@@ -69,27 +69,24 @@ namespace graphics
     {
         int width;
         int height;
+        std::span<const byte> data;
         u32 format;
         bool sRGB;
 
         bool generate_mips = true;
-
         bool has_data = true;
-        std::span<const byte> data;
 
         bool is_storage = false;
         u32 internalFormat = 0;
     };
+
 
     struct DispatchSize {
         u32 x = 1, y = 1, z = 1;
     };
 
     struct ComputeBinding {
-        enum class  Type {
-            Buffer,
-            Texture
-        } type;
+        enum class Kind : u32 { Buffer, Image } kind;
         u32 slot;
         u32 resource;
         Access access;
@@ -98,9 +95,10 @@ namespace graphics
     struct ComputeDispatch {
         ComputeShaderHandle shader = invalid_handle;
         DispatchSize groups;
-        std::span<const ComputeBindng> bindings;
-        std::span<const byte> params;
+        std::vector<ComputeBinding> bindings;
+        std::vector<byte> params;
     };
+
 
     struct DrawCall
     {
@@ -193,9 +191,6 @@ namespace graphics
         }
 
 
-        void update_buffer(BufferHandle, size_t offset, std::span<const byte>);
-        void resize_buffer(BufferHandle, size_t newSize);
-
         void submit_dispatch(const ComputeDispatch&);
         void submit_draw_call(const DrawCall& drawCall);
 
@@ -209,7 +204,7 @@ namespace graphics
 
         TextureHandle default_texture(std::string_view sampler) const;
 
-        int draw_call_count() ret(drawCalls.size())
+        u32 draw_call_count() ret(drawCalls.size())
 
     private:
         struct FormatPool
@@ -263,7 +258,6 @@ namespace graphics
         std::vector<Material> materials;
         std::vector<GpuShader> shaders;
         std::vector<GpuTexture> textures;
-        std::vector<GpuComputeShader> compute_shaders;
 
         TextureHandle whiteTexture = 0, blackTexture = 0, normalTexture = 0;
 

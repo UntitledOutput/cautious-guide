@@ -751,6 +751,7 @@ void RenderMgr::screenshot(std::string filename)
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(x, y, width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
 
+    stbi_flip_vertically_on_write(1); // Flip the image vertically
     stbi_write_png(filename.c_str(), width, height, 3, data, 0);
 
     free(data);

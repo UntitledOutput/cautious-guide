@@ -75,11 +75,14 @@ int Engine::start(GameCtrl& game)
         game.on_update(*this, frame);
         game.on_render(*this, acc / tick_step);
         _renderMgr->flush();
+        _window->render_ui();
 
-        if (_frame_count == 5)
-            _window->screenshot("screenshot.png");
+        if (_frame_count == 15) {
+            _renderMgr->screenshot("screenshot.png");
+            _running = false; // for the remote test, we just want to take a screenshot and exit
+        }
 
-        _window->swap();
+        _window->present();
         _frame_count++;
     }
 

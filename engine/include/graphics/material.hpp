@@ -20,6 +20,7 @@ namespace graphics
         std::unordered_map<std::string, u32> images; // name -> image unit
         std::unordered_map<std::string, u32> storageBlocks; // name -> block index
         u32 blockSize = 0;
+        u32 localSize[3] = {1, 1, 1}; // compute shaders only
     };
 
     class GpuShader

@@ -10,11 +10,11 @@ void graphics::update_camera(Engine& engine)
         [&](ecs::Entity e, scene::Transform& wt, Camera& _cam)
         {
             var position = wt.position;
-            var aspect = engine.window().framebuffer_width() / double(engine.window().framebuffer_height());
+            var aspect = engine.window().framebuffer_width() / float(engine.window().framebuffer_height());
 
             var cam = CameraData {};
             cam.view = math::inverse_affine(math::translate(position) * math::to_mat4(wt.rotation));
-            cam.projection = math::perspective(math::radians(_cam.fov), aspect,  _cam.z_near, _cam.z_far);
+            cam.projection = math::perspective(math::radians(_cam.fov), float(aspect),  _cam.z_near, _cam.z_far);
             cam.viewProjection = cam.projection * cam.view;
             cam.position = {position.x, position.y, position.z, 1.0f};
 

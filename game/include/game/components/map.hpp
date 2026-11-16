@@ -5,6 +5,6 @@
 
 struct Map {
     graphics::TextureHandle uvMapImage;
-}
+};
 
-void setup_map(Engine& engine, const Map& map);
+void setup_map(Engine& engine, ecs::Entity map);

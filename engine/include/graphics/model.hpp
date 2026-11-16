@@ -195,8 +195,8 @@ namespace graphics
         const ModelAsset& get(ModelHandle h) ret(assets[h]);
         const ModelHandle find(std::string path);
 
-        void SetSettings(ModelCacheSettings& settings)
-        { this->settings = settings;
+        void SetSettings(ModelCacheSettings& _settings)
+        { this->settings = _settings;
         }
 
     private:

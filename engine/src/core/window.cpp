@@ -97,10 +97,14 @@ void Window::poll_events(input::Input& in)
     }
 }
 
-void Window::swap()
+void Window::render_ui()
 {
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void Window::present()
+{
     SDL_GL_SwapWindow(_window);
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();

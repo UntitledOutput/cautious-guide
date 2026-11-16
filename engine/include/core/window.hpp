@@ -32,7 +32,8 @@ public:
     Window& operator=(const Window&) = delete;
 
     void poll_events(input::Input& in);
-    void swap();
+    void render_ui();
+    void present();
 
     bool should_close() ret(_should_close)
     bool was_resized() ret(_resized)

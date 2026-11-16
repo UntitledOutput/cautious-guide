@@ -61,6 +61,7 @@ namespace
 #include "physics/world.hpp"
 #include <imgui.h>
 #include <random>
+#include <game/components/map.hpp>
 
 const SarcFile* get_sarc_file(Engine& engine,std::string path)
 { 
@@ -131,17 +132,10 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     var playerModel = scene::spawn_model(engine.world(), playerModelHandle, t);
     scene::attach(engine.world(),playerModel,playerEntity);
     playerMdl = playerModel;
-    
-    var mapModelHandle = engine.models().load("assets/models/map.glb");
-    scene::Transform gt;
-    gt.scale *= 20;
-    var ground = scene::spawn_model(engine.world(), mapModelHandle, gt);
-    var& gc = engine.world().add<physics::Collider>(ground);
-    gc.shape = physics::ShapeType::Mesh;
-    gc.shape = physics::ShapeType::Mesh;
-    gc.mesh.id = engine.collision_mesh(mapModelHandle,gt.scale);
-    gc.layer = L_Ground;
-    engine.world().get<ecs::Name>(ground).value = "Map";
+
+    var map = engine.world().create();
+    setup_map(engine, map);
+
 
 }
 
