@@ -21,19 +21,19 @@ inline VertexFormat operator|(VertexFormat lhs, VertexFormat rhs)
 {
     using T = std::underlying_type_t<VertexFormat>;
     return static_cast<VertexFormat>(static_cast<T>(lhs) | static_cast<T>(rhs));
-}
+};
 
 inline VertexFormat operator&(VertexFormat lhs, VertexFormat rhs)
 {
     using T = std::underlying_type_t<VertexFormat>;
     return static_cast<VertexFormat>(static_cast<T>(lhs) & static_cast<T>(rhs));
-}
+};
 
 inline VertexFormat& operator|=(VertexFormat& lhs, VertexFormat rhs)
 {
     lhs = lhs | rhs;
     return lhs;
-}
+};
 
 
 struct Vertex

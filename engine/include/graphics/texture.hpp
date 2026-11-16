@@ -15,6 +15,7 @@ namespace graphics {
     private: 
         friend RenderMgr;
         u32 handle;
+        u32 format = 0; // internal fmt
     };
 
     // todo: add render textures

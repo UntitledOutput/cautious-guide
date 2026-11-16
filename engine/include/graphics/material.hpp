@@ -17,6 +17,8 @@ namespace graphics
     {
         std::unordered_map<std::string, ShaderParamInfo> params; // name -> parameter
         std::unordered_map<std::string, u32> samplers; // name -> texture unit
+        std::unordered_map<std::string, u32> images; // name -> image unit
+        std::unordered_map<std::string, u32> storageBlocks; // name -> block index
         u32 blockSize = 0;
     };
 

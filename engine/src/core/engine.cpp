@@ -75,6 +75,10 @@ int Engine::start(GameCtrl& game)
         game.on_update(*this, frame);
         game.on_render(*this, acc / tick_step);
         _renderMgr->flush();
+
+        if (_frame_count == 5)
+            _window->screenshot("screenshot.png");
+
         _window->swap();
         _frame_count++;
     }

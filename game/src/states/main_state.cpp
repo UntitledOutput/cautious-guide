@@ -105,7 +105,7 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
 
     var playerEntity = engine.world().create();
     var& playerTransform = engine.world().add<scene::Transform>(playerEntity);
-    playerTransform.position.y = 100.f;
+    playerTransform.position.y = 10.f;
     var& player = engine.world().add<Player>(playerEntity);
     player.moveSpeed = 25;
 

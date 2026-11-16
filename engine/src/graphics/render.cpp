@@ -35,6 +35,10 @@ namespace
     };
 
     constexpr GLuint joint_binding = 3;
+    constexpr GLuint params_binding = 3; 
+    constexpr GLuint instance_binding = 4; 
+    constexpr GLuint first_user_ssbo_binding = 5;
+
 
     struct ObjectData
     {
@@ -105,13 +109,11 @@ namespace
     }
 
     uint make_compute_shader(const graphics::ComputeShaderDescriptor& c) {
-        uint shader = make_shader(GL_COMPUTE_SHADER, c.computeSource);
-        var program = make_program(&shader,1);
-
-        return program;
+        uint shader = make_shader(GL_COMPUTE_SHADER, c.computeSource.c_str());
+        return make_program(&shader, 1);
     }
 
-    uint make_texture(const graphics::TextureDescriptor& d)
+    uint make_texture(const graphics::TextureDescriptor& d, GLenum& internalOut)
     { 
         GLenum internal = GL_RGBA8;
         switch (d.format)
@@ -121,17 +123,35 @@ namespace
         case GL_RGB: internal = d.sRGB ? GL_SRGB8 : GL_RGB8; break;
         case GL_RGBA: internal = d.sRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8; break;
         }
+        if (d.internalFormat)
+            internal = d.internalFormat;
+        internalOut = internal;
 
         uint tex = 0;
         glGenTextures(1, &tex);
         glBindTexture(GL_TEXTURE_2D, tex);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, GLint(internal), d.width, d.height, 0, d.format, GL_UNSIGNED_BYTE, d.data.data());
-        glGenerateMipmap(GL_TEXTURE_2D);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+
+        if (d.is_storage)
+        {
+            if (d.sRGB && !d.internalFormat)
+                throw_error("sRGB formats can't be used as storage images");
+            glTexStorage2D(GL_TEXTURE_2D, 1, internal, d.width, d.height);
+            if (d.has_data && !d.data.empty())
+                glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, d.width, d.height, d.format, GL_UNSIGNED_BYTE, d.data.data());
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            return tex;
+        }
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GLint(internal), d.width, d.height, 0, d.format, GL_UNSIGNED_BYTE,d.generate_mips ? d.data.data() : NULL);
+        if (d.generate_mips) 
+            glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, d.generate_mips ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         return tex;
     }
+
 
     void apply_state(const graphics::RenderState& s, graphics::RenderState& cur, bool force)
     {
@@ -182,16 +202,13 @@ namespace
     {
         switch (type)
         {
-            case GL_FLOAT:
-            case GL_INT:
-            case GL_UNSIGNED_INT:
-            case GL_BOOL:
+            case GL_FLOAT: case GL_INT: case GL_UNSIGNED_INT: case GL_BOOL:
                 return 4;
-            case GL_FLOAT_VEC2:
+            case GL_FLOAT_VEC2: case GL_INT_VEC2: case GL_UNSIGNED_INT_VEC2:
                 return 8;
-            case GL_FLOAT_VEC3:
+            case GL_FLOAT_VEC3: case GL_INT_VEC3: case GL_UNSIGNED_INT_VEC3:
                 return 12;
-            case GL_FLOAT_VEC4:
+            case GL_FLOAT_VEC4: case GL_INT_VEC4: case GL_UNSIGNED_INT_VEC4:
                 return 16;
             case GL_FLOAT_MAT4:
                 return 64;
@@ -200,10 +217,24 @@ namespace
         }
     }
 
+
     bool is_sampler(GLenum type)
     {
         return type == GL_SAMPLER_2D || type == GL_SAMPLER_2D_ARRAY || type == GL_SAMPLER_CUBE;
     }
+
+    bool is_image(GLenum type)
+    {
+        switch (type)
+        {
+            case GL_IMAGE_2D: case GL_IMAGE_3D: case GL_IMAGE_2D_ARRAY: case GL_IMAGE_CUBE:
+            case GL_INT_IMAGE_2D: case GL_UNSIGNED_INT_IMAGE_2D:
+                return true;
+            default:
+                return false;
+        }
+    }
+
 
     std::string resource_name(uint program, GLenum iface, GLuint index, GLint len)
     {
@@ -213,14 +244,14 @@ namespace
         return name;
     }
 
-    graphics::ShaderLayout reflect(uint program)
+    graphics::ShaderLayout reflect(uint program, const char* paramBlock, GLuint paramBinding)
     {
         graphics::ShaderLayout layout;
 
-        GLuint block = glGetProgramResourceIndex(program, GL_UNIFORM_BLOCK, "Material");
+        GLuint block = glGetProgramResourceIndex(program, GL_UNIFORM_BLOCK, paramBlock);
         if (block != GL_INVALID_INDEX)
         {
-            glUniformBlockBinding(program, block, material_binding);
+            glUniformBlockBinding(program, block, paramBinding);
 
             const GLenum blockProps[] = {GL_BUFFER_DATA_SIZE, GL_NUM_ACTIVE_VARIABLES};
             GLint blockInfo[2];
@@ -251,23 +282,62 @@ namespace
         bind_block("Camera", camera_binding);
         bind_block("Object", object_binding);
 
+        // storage blocks: engine-owned names get fixed bindings, everything else is numbered per program
+        GLint maxSsbo = 0;
+        glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &maxSsbo);
+
+        GLint ssboCount = 0;
+        glGetProgramInterfaceiv(program, GL_SHADER_STORAGE_BLOCK, GL_ACTIVE_RESOURCES, &ssboCount);
+        GLuint nextSsbo = first_user_ssbo_binding;
+        for (GLint i = 0; i < ssboCount; ++i)
+        {
+            const GLenum prop = GL_NAME_LENGTH;
+            GLint len = 0;
+            glGetProgramResourceiv(program, GL_SHADER_STORAGE_BLOCK, GLuint(i), 1, &prop, 1, nullptr, &len);
+            std::string name = resource_name(program, GL_SHADER_STORAGE_BLOCK, GLuint(i), len);
+
+            GLuint binding;
+            if (name == "Joints")
+                binding = joint_binding;
+            else if (name == "Instances")
+                binding = instance_binding;
+            else
+                binding = nextSsbo++;
+
+            if (GLint(binding) >= maxSsbo)
+                throw_error("shader uses more storage blocks than the GPU has bindings");
+
+            glShaderStorageBlockBinding(program, GLuint(i), binding);
+            layout.storageBlocks[std::move(name)] = binding;
+        }
+
+        // loose uniforms: samplers get texture units, images get image units
         GLint count = 0;
         glGetProgramInterfaceiv(program, GL_UNIFORM, GL_ACTIVE_RESOURCES, &count);
-        u32 unit = 0;
+        u32 unit = 0, imageUnit = 0;
         for (GLint i = 0; i < count; ++i)
         {
             const GLenum props[] = {GL_TYPE, GL_BLOCK_INDEX, GL_LOCATION, GL_NAME_LENGTH};
             GLint info[4];
             glGetProgramResourceiv(program, GL_UNIFORM, i, 4, props, 4, nullptr, info);
-            if (info[1] != -1 || !is_sampler(info[0]))
+            if (info[1] != -1)
                 continue;
 
-            glProgramUniform1i(program, info[2], GLint(unit));
-            layout.samplers[resource_name(program, GL_UNIFORM, i, info[3])] = unit++;
+            if (is_sampler(info[0]))
+            {
+                glProgramUniform1i(program, info[2], GLint(unit));
+                layout.samplers[resource_name(program, GL_UNIFORM, i, info[3])] = unit++;
+            }
+            else if (is_image(info[0]))
+            {
+                glProgramUniform1i(program, info[2], GLint(imageUnit));
+                layout.images[resource_name(program, GL_UNIFORM, i, info[3])] = imageUnit++;
+            }
         }
 
         return layout;
     }
+
 
 } // namespace
 
@@ -309,6 +379,11 @@ RenderMgr::RenderMgr(const RenderConfiguration& cfg)
     blackTexture = solid(0, 0, 0);
     normalTexture = solid(128, 128, 255);
     glEnable(GL_FRAMEBUFFER_SRGB);
+
+    GLint g[3];
+    for (GLuint i = 0; i < 3; ++i)
+        glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, i, &g[i]);
+    maxGroups = {u32(g[0]), u32(g[1]), u32(g[2])};
 }
 
 RenderMgr::~RenderMgr()
@@ -320,6 +395,11 @@ RenderMgr::~RenderMgr()
         glDeleteBuffers(1, &pool.vbo);
         glDeleteBuffers(1,&pool.ibo);
     }
+
+    for (GpuBuffer& b : buffers)
+        glDeleteBuffers(1, &b.handle);
+    glDeleteBuffers(1, &computeParamsBuffer);
+
 }
 
 u32 RenderMgr::push_joints(std::span<const math::mat4> joints)
@@ -336,7 +416,7 @@ ShaderHandle RenderMgr::create_shader(const ShaderDescriptor& descriptor) {
     _shaders[1] = make_shader(GL_FRAGMENT_SHADER,descriptor.fragmentSource.c_str());
     
     GpuShader shader(make_program(_shaders, 2));
-    shader.layout = reflect(shader.handle);
+    shader.layout = reflect(shader.handle, "Material", material_binding);
     if (shader.layout.blockSize > materialStride)
         throw_error("material block is bigger than the material stride");
     shaders.push_back(std::move(shader));
@@ -419,14 +499,224 @@ MeshHandle RenderMgr::create_mesh(const MeshDescriptor& descriptor)
 
 TextureHandle RenderMgr::create_texture(const TextureDescriptor& descriptor)
 {
-    textures.push_back(GpuTexture(make_texture(descriptor)));
+    GLenum internal = 0;
+    GpuTexture tex(make_texture(descriptor, internal));
+    tex.format = internal;
+    textures.push_back(std::move(tex));
     return TextureHandle(textures.size() - 1);
 }
 
-ComputeShaderHandle graphics::RenderMgr::create_compute_shader(const ComputeShaderDescriptor& descriptor)
+BufferHandle RenderMgr::create_buffer(const BufferDescriptor& d)
 {
-    return ComputeShaderHandle();
+    if (d.size == 0)
+        throw_error("buffer size is 0");
+    if (d.initialData.size() > d.size)
+        throw_error("buffer initial data is bigger than the buffer");
+
+    GpuBuffer b;
+    b.handle = make_buffer(GLsizeiptr(d.size)); // leaves it bound to GL_COPY_WRITE_BUFFER
+    b.size = d.size;
+    b.usage = d.usage;
+
+    // immutable storage starts undefined; zero it so compute can treat 0 as "uninitialised"
+    glClearBufferData(GL_COPY_WRITE_BUFFER, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, nullptr);
+    if (!d.initialData.empty())
+        upload(b.handle, 0, GLsizeiptr(d.initialData.size()), d.initialData.data());
+
+    buffers.push_back(b);
+    return BufferHandle(buffers.size() - 1);
 }
+
+void RenderMgr::update_buffer(BufferHandle h, size_t offset, std::span<const byte> data)
+{
+    if (h >= buffers.size())
+        throw_error("buffer doesn't exist");
+    if (offset + data.size() > buffers[h].size)
+        throw_error("buffer update out of range");
+    upload(buffers[h].handle, GLintptr(offset), GLsizeiptr(data.size()), data.data());
+}
+
+void RenderMgr::resize_buffer(BufferHandle h, size_t newSize)
+{
+    GpuBuffer& b = buffers.at(h);
+    if (newSize == b.size)
+        return;
+
+    const size_t keep = std::min(b.size, newSize);
+    b.handle = grow_buffer(b.handle, GLsizeiptr(keep), GLsizeiptr(newSize)); // new one is on COPY_WRITE
+    if (newSize > keep)
+        glClearBufferSubData(GL_COPY_WRITE_BUFFER, GL_R8UI, GLintptr(keep), GLsizeiptr(newSize - keep),
+                             GL_RED_INTEGER, GL_UNSIGNED_BYTE, nullptr);
+    b.size = newSize;
+}
+
+void RenderMgr::read_buffer(BufferHandle h, size_t offset, std::span<byte> out)
+{
+    const GpuBuffer& b = buffers.at(h);
+    if (offset + out.size() > b.size)
+        throw_error("buffer read out of range");
+
+    glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+    glBindBuffer(GL_COPY_READ_BUFFER, b.handle);
+    glGetBufferSubData(GL_COPY_READ_BUFFER, GLintptr(offset), GLsizeiptr(out.size()), out.data());
+}
+
+ComputeShaderHandle RenderMgr::create_compute_shader(const ComputeShaderDescriptor& descriptor)
+{
+    GpuShader shader(make_compute_shader(descriptor));
+    shader.layout = reflect(shader.handle, "Params", params_binding);
+    if (shader.layout.blockSize > materialStride)
+        throw_error("compute Params block is bigger than the material stride");
+
+    GLint size[3];
+    glGetProgramiv(shader.handle, GL_COMPUTE_WORK_GROUP_SIZE, size);
+    for (int i = 0; i < 3; ++i)
+        shader.layout.localSize[i] = u32(size[i]);
+
+    compute_shaders.push_back(std::move(shader));
+    return ComputeShaderHandle(compute_shaders.size() - 1);
+}
+
+ComputeDispatch RenderMgr::make_dispatch(ComputeShaderHandle shader) const
+{
+    if (shader >= compute_shaders.size())
+        throw_error("compute shader doesn't exist");
+
+    ComputeDispatch d;
+    d.shader = shader;
+    d.params.resize(compute_shaders[shader].layout.blockSize);
+    return d;
+}
+
+DispatchSize RenderMgr::groups_for(ComputeShaderHandle shader, u32 x, u32 y, u32 z) const
+{
+    const u32* ls = compute_shaders.at(shader).layout.localSize;
+    auto div = [](u32 n, u32 d) { return (n + d - 1) / d; };
+    return {div(x, ls[0]), div(y, ls[1]), div(z, ls[2])};
+}
+
+void RenderMgr::set_dispatch_buffer(ComputeDispatch& d, std::string_view block, BufferHandle buffer, Access access)
+{
+    if (buffer >= buffers.size())
+        throw_error("buffer doesn't exist");
+
+    const auto& blocks = compute_shaders.at(d.shader).layout.storageBlocks;
+    auto it = blocks.find(std::string(block));
+    if (it == blocks.end())
+        return; // optimized out; a typo is caught by submit_dispatch's "never bound" check
+
+    d.bindings.push_back({ComputeBinding::Kind::Buffer, it->second, buffer, access});
+}
+
+void RenderMgr::set_dispatch_image(ComputeDispatch& d, std::string_view image, TextureHandle texture, Access access)
+{
+    if (texture >= textures.size())
+        throw_error("texture doesn't exist");
+
+    const auto& images = compute_shaders.at(d.shader).layout.images;
+    auto it = images.find(std::string(image));
+    if (it == images.end())
+        return;
+
+    d.bindings.push_back({ComputeBinding::Kind::Image, it->second, texture, access});
+}
+
+void RenderMgr::submit_dispatch(ComputeDispatch d)
+{
+    if (d.shader >= compute_shaders.size())
+        throw_error("compute shader doesn't exist");
+
+    const ShaderLayout& layout = compute_shaders[d.shader].layout;
+    if (d.params.size() != layout.blockSize)
+        throw_error("dispatch params don't match the shader (use make_dispatch)");
+
+    auto bound = [&](ComputeBinding::Kind kind, u32 slot)
+    {
+        return std::any_of(d.bindings.begin(), d.bindings.end(),
+                           [&](const ComputeBinding& b) { return b.kind == kind && b.slot == slot; });
+    };
+    for (const auto& [name, slot] : layout.storageBlocks)
+        if (slot >= first_user_ssbo_binding && !bound(ComputeBinding::Kind::Buffer, slot))
+            throw_error(std::format("compute dispatch never bound buffer '{}'", name));
+    for (const auto& [name, unit] : layout.images)
+        if (!bound(ComputeBinding::Kind::Image, unit))
+            throw_error(std::format("compute dispatch never bound image '{}'", name));
+
+    if (d.groups.x > maxGroups.x || d.groups.y > maxGroups.y || d.groups.z > maxGroups.z)
+        throw_error("dispatch has more work groups than the GPU allows");
+
+    dispatches.push_back(std::move(d));
+}
+
+void RenderMgr::run_dispatches()
+{
+    if (dispatches.empty())
+        return;
+
+    // pack every dispatch's params into one UBO upload, one materialStride slot each
+    const u32 n = u32(dispatches.size());
+    if (n > computeParamsCap)
+    {
+        if (computeParamsBuffer)
+            glDeleteBuffers(1, &computeParamsBuffer);
+        computeParamsCap = grow_cap(std::max(computeParamsCap, 64u), n);
+        computeParamsBuffer = make_buffer(GLsizeiptr(computeParamsCap) * materialStride);
+    }
+
+    computeParamsStaging.assign(size_t(n) * materialStride, 0);
+    for (u32 i = 0; i < n; ++i)
+    {
+        const auto& p = dispatches[i].params;
+        if (!p.empty())
+            std::memcpy(computeParamsStaging.data() + size_t(i) * materialStride, p.data(), p.size());
+    }
+    upload(computeParamsBuffer, 0, GLsizeiptr(computeParamsStaging.size()), computeParamsStaging.data());
+
+    uint curProgram = 0;
+    for (u32 i = 0; i < n; ++i)
+    {
+        const ComputeDispatch& d = dispatches[i];
+        if (d.groups.x == 0 || d.groups.y == 0 || d.groups.z == 0)
+            continue;
+
+        const uint program = compute_shaders[d.shader].handle;
+        if (program != curProgram)
+        {
+            glUseProgram(program);
+            curProgram = program;
+        }
+
+        if (!d.params.empty())
+            glBindBufferRange(GL_UNIFORM_BUFFER, params_binding, computeParamsBuffer,
+                              GLintptr(i) * materialStride, GLsizeiptr(d.params.size()));
+
+        for (const ComputeBinding& b : d.bindings)
+        {
+            if (b.kind == ComputeBinding::Kind::Buffer)
+            {
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, b.slot, buffers[b.resource].handle);
+            }
+            else
+            {
+                const GLenum access = b.access == Access::Read    ? GL_READ_ONLY
+                                    : b.access == Access::Write   ? GL_WRITE_ONLY
+                                                                  : GL_READ_WRITE;
+                const GpuTexture& t = textures[b.resource];
+                glBindImageTexture(b.slot, t.handle, 0, GL_FALSE, 0, access, t.format);
+            }
+        }
+
+        glDispatchCompute(d.groups.x, d.groups.y, d.groups.z);
+
+        // conservative: makes every write visible to every later use.
+        // step 5 replaces this with per-resource tracking using ComputeBinding::access + BufferUsage.
+        glMemoryBarrier(GL_ALL_BARRIER_BITS);
+    }
+
+    glUseProgram(0);
+    dispatches.clear();
+}
+
 
 void RenderMgr::submit_draw_call(const DrawCall& drawCall)
 {
@@ -434,6 +724,11 @@ void RenderMgr::submit_draw_call(const DrawCall& drawCall)
         throw_error("draw call references a mesh or material that doesn't exist");
     if (drawCalls.size() >= cfg.maxDrawCalls)
         return;
+    if (drawCall.instanceBuffer != invalid_handle && drawCall.instanceBuffer >= buffers.size())
+        throw_error("draw call references an instance buffer that doesn't exist");
+    if (drawCall.instanceCount == 0)
+        return;
+
 
     drawCalls.push_back(drawCall);
 }
@@ -512,6 +807,8 @@ void RenderMgr::flush()
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, joint_binding, jointBuffer);
     }
 
+    run_dispatches();
+
     uint curProgram = 0;
     uint curVao = 0;
     u32 curMaterial = UINT32_MAX;
@@ -559,9 +856,14 @@ void RenderMgr::flush()
         glBindBufferRange(GL_UNIFORM_BUFFER, object_binding, objectBuffer, GLintptr(i) * materialStride,
                           sizeof(ObjectData));
 
+        if (dc.instanceBuffer != invalid_handle)
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, instance_binding, buffers[dc.instanceBuffer].handle);
+
         glDrawElementsInstancedBaseVertexBaseInstance(
             GL_TRIANGLES, GLsizei(mesh.idx), GL_UNSIGNED_INT,
-            reinterpret_cast<const void*>(std::uintptr_t(mesh.first_idx) * sizeof(u32)), 1, GLint(mesh.base_vtx), 0);
+            reinterpret_cast<const void*>(std::uintptr_t(mesh.first_idx) * sizeof(u32)),
+            GLsizei(dc.instanceCount), GLint(mesh.base_vtx), 0);
+
     }
 
     glBindVertexArray(0);

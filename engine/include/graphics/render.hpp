@@ -19,6 +19,33 @@ namespace graphics
     using ShaderHandle = u32;
     using TextureHandle = u32;
     using ComputeShaderHandle = u32;
+    using BufferHandle = u32;
+
+    constexpr u32 invalid_handle = UINT32_MAX;
+
+    enum class BufferUsage : u32 {
+        None = 0,
+        Storage = 1 << 0,
+        Vertex = 1 << 1,
+        Index = 1 << 2,
+        Indirect = 1 << 3,
+        Readback = 1 << 4
+    };
+    constexpr BufferUsage operator|(BufferUsage a, BufferUsage b) { return BufferUsage(u32(a) | u32(b)); };
+    constexpr BufferUsage operator&(BufferUsage a, BufferUsage b) { return BufferUsage(u32(a) & u32(b)); };
+
+    enum Access {
+        Read = 0,
+        Write = 1,
+        ReadWrite = 2
+    };
+
+    struct BufferDescriptor {
+        size_t size;
+        BufferUsage usage;
+
+        std::span<const byte> initialData;
+    };
 
     struct MeshDescriptor
     {
@@ -36,18 +63,43 @@ namespace graphics
     struct ComputeShaderDescriptor
     {
         std::string computeSource;
-        math::vec3 elementSize;
-
-        size_t initialBufferSize;
     };
 
     struct TextureDescriptor
     {
         int width;
         int height;
-        std::span<const byte> data;
         u32 format;
         bool sRGB;
+
+        bool generate_mips = true;
+
+        bool has_data = true;
+        std::span<const byte> data;
+
+        bool is_storage = false;
+        u32 internalFormat = 0;
+    };
+
+    struct DispatchSize {
+        u32 x = 1, y = 1, z = 1;
+    };
+
+    struct ComputeBinding {
+        enum class  Type {
+            Buffer,
+            Texture
+        } type;
+        u32 slot;
+        u32 resource;
+        Access access;
+    };
+
+    struct ComputeDispatch {
+        ComputeShaderHandle shader = invalid_handle;
+        DispatchSize groups;
+        std::span<const ComputeBindng> bindings;
+        std::span<const byte> params;
     };
 
     struct DrawCall
@@ -57,6 +109,10 @@ namespace graphics
         math::mat4 model;
         u32 jointOffset = 0;
         u32 jointCount = 0;
+
+        u32 instanceCount = 1;
+        BufferHandle instanceBuffer = invalid_handle;
+
         // todo: instancing and draw order
     };
 
@@ -110,8 +166,37 @@ namespace graphics
         MaterialHandle create_material(const ShaderHandle& shader);
         MeshHandle create_mesh(const MeshDescriptor& descriptor);
         TextureHandle create_texture(const TextureDescriptor& descriptor);
-        ComputeShaderHandle create_compute_shader(const ComputeShaderDescriptor& descriptor);
 
+            BufferHandle create_buffer(const BufferDescriptor& descriptor);
+        void update_buffer(BufferHandle h, size_t offset, std::span<const byte> data);
+        void resize_buffer(BufferHandle h, size_t newSize);
+        void read_buffer(BufferHandle h, size_t offset, std::span<byte> out); // stalls the CPU; debug/tools only
+        size_t buffer_size(BufferHandle h) const { return buffers[h].size; }
+
+        ComputeShaderHandle create_compute_shader(const ComputeShaderDescriptor& descriptor);
+        ComputeDispatch make_dispatch(ComputeShaderHandle shader) const;
+        DispatchSize groups_for(ComputeShaderHandle shader, u32 x, u32 y = 1, u32 z = 1) const;
+        void set_dispatch_buffer(ComputeDispatch& d, std::string_view block, BufferHandle buffer, Access access);
+        void set_dispatch_image(ComputeDispatch& d, std::string_view image, TextureHandle texture, Access access);
+        void submit_dispatch(ComputeDispatch dispatch); // runs in flush(), before draws, in submission order
+
+        template<typename T>
+        void set_dispatch_param(ComputeDispatch& d, std::string_view name, const T& value)
+        {
+            const auto& params = compute_shaders[d.shader].layout.params;
+            auto it = params.find(std::string(name));
+            if (it == params.end())
+                return; // unused params get optimized out of the block, same as materials
+            if (sizeof(T) > it->second.size)
+                throw_error("param type doesn't match the shader");
+            std::memcpy(d.params.data() + it->second.offset, &value, sizeof(T));
+        }
+
+
+        void update_buffer(BufferHandle, size_t offset, std::span<const byte>);
+        void resize_buffer(BufferHandle, size_t newSize);
+
+        void submit_dispatch(const ComputeDispatch&);
         void submit_draw_call(const DrawCall& drawCall);
 
         void screenshot(std::string filename);
@@ -140,15 +225,24 @@ namespace graphics
             u32 base_vtx, first_idx, idx;
         };
 
-        struct GpuComputeShader
+        struct GpuBuffer
         {
-            u32 handle;
-
-            
-
-            u32 ssbo;
-            size_t dataSize;
+            uint handle = 0;
+            size_t size = 0;
+            BufferUsage usage = BufferUsage::None;
         };
+
+        void run_dispatches();
+
+        std::vector<GpuBuffer> buffers;
+        std::vector<GpuShader> compute_shaders;
+        std::vector<ComputeDispatch> dispatches;
+
+        uint computeParamsBuffer = 0;
+        u32 computeParamsCap = 0;
+        std::vector<byte> computeParamsStaging;
+        DispatchSize maxGroups{};
+
 
         FormatPool& get_pool(VertexFormat fmt);
 
