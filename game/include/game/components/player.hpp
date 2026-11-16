@@ -5,7 +5,13 @@
 struct Player
 {
     float moveSpeed = 3.0f;
+    float jumpSpeed = 30.0f;
+    float gravity = 80.0f;
+    float verticalVelocity = 0.0f;
 };
+
+void update_player(Engine& engine, float delta); // camera, per frame
+void update_player_movement(Engine& engine, float dt); // fixed tick
 
 struct PlayerCamera
 {
@@ -23,5 +29,3 @@ struct PlayerCamera
 
     ecs::Entity player = ecs::null_entity;
 };
-
-void update_player(Engine& engine, float delta);

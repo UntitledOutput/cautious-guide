@@ -116,6 +116,13 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     c.offset.y = 7.f;
     c.layer = L_Player;
     engine.world().add<physics::RigidBody>(playerEntity);
+    engine.world().add<physics::RigidBody>(playerEntity).type = physics::RigidBody::Type::Kinematic;
+
+    var& cc = engine.world().add<physics::CharacterController>(playerEntity);
+    cc.stepHeight = 1.5f;
+    cc.snapDistance = 1.5f;
+    cc.skin = 0.05f;
+    cc.mask = L_Ground;
 
 
     var playerModelHandle = engine.models().load("assets/models/tofu.glb");
@@ -221,8 +228,7 @@ void MatchScene::on_update(GameCtrl& game, Engine& engine, float delta)
 }
 
 void MatchScene::on_fixed_update(GameCtrl& game, Engine& engine, float delta)
-{
-}
+{ update_player_movement(engine, delta); }
 
 void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
 {

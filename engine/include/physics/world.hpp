@@ -134,6 +134,31 @@ namespace physics
         bool hitTriggers = false;
     };
 
+    struct Overlap
+    {
+        ecs::Entity entity;
+        math::vec3 normal; 
+        float depth;
+        u16 surface = 0;
+    };
+
+    struct CharacterController
+    {
+        float maxSlopeDeg = 50.0f;
+        float stepHeight = 0.35f;
+        float snapDistance = 0.25f; 
+        float skin = 0.01f; 
+        u32 mask = ~0u;
+
+        // written by move_character
+        bool grounded = false;
+        math::vec3 groundNormal{0.0f, 1.0f, 0.0f};
+        ecs::Entity ground = ecs::null_entity;
+        u16 groundSurface = 0;
+        bool hitWall = false;
+        bool hitCeiling = false;
+    };
+
     class PhysicsWorld
     {
     public:
@@ -165,6 +190,19 @@ namespace physics
                                        const CastFilter& filter = {}) const;
         std::optional<CastHit> sphere_cast(ecs::World& w, math::vec3 origin, float radius, math::vec3 dir,
                                            float maxDist, const CastFilter& filter = {}) const;
+        
+        std::optional<CastHit> capsule_cast(ecs::World& w, math::vec3 center, float radius, float halfHeight,
+                                            math::vec3 dir, float maxDist, const CastFilter& filter = {}) const;
+
+        void overlap_capsule(ecs::World& w, math::vec3 center, float radius, float halfHeight,
+                             std::vector<Overlap>& out, const CastFilter& filter = {}) const;
+        void overlap_sphere(ecs::World& w, math::vec3 center, float radius, std::vector<Overlap>& out,
+                            const CastFilter& filter = {}) const
+        {
+            overlap_capsule(w, center, radius, 0.0f, out, filter);
+        }
+
+        void move_character(ecs::World& w, ecs::Entity e, math::vec3 displacement) const;
 
     private:
         std::shared_ptr<MeshCache> meshes_;
@@ -174,8 +212,8 @@ namespace physics
         void collide();
         void resolve(InternalPhysicsBody& a, InternalPhysicsBody& b, const ContactManifold& m);
 
-                std::optional<CastHit> cast(ecs::World& w, math::vec3 origin, float radius, math::vec3 dir, float maxDist,
-                                    const CastFilter& filter) const;
+        std::optional<CastHit> cast(ecs::World& w, math::vec3 origin, float radius, float halfHeight, math::vec3 dir,
+                                    float maxDist, const CastFilter& filter) const;
 
         std::vector<InternalPhysicsBody> bodies_;
         ContactTracker tracker_;

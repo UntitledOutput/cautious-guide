@@ -7,47 +7,6 @@
 
 void update_player(Engine& engine, float deltaTime)
 {
-
-    // player updating
-    engine.world().view<scene::Transform, Player>().each(
-        [&](ecs::Entity e, scene::Transform& wt, Player& _player)
-        { 
-            var cameraEntity = engine.world().view<PlayerCamera>().first();
-
-            var rot = wt.rotation;
-
-            var moveAxis = engine.actions().axis2(engine.actions().find("move"));
-
-            if (moveAxis.magnitude() > 0.1f || true)
-            {
-                // set the world forward to the camera forward
-                var camForward = engine.world().get<scene::Transform>(cameraEntity).forward();
-                camForward.y = 0;
-                camForward = math::normalize(camForward);
-
-                wt.rotation = math::look_rotation(-camForward, math::vec3{0, 1, 0});
-            }
-
-            var forward = wt.forward();
-            var right = wt.right();
-
-            var move = math::vec3{};
-            move -= forward * moveAxis.y;
-            move += right * moveAxis.x;
-            move = math::normalize(move);
-
-
-            if (math::dot(move,move) > 0.0f)
-            {
-                var r = math::look_rotation(move, math::vec3{0, 1, 0});
-                //wt.rotation = math::slerp(rot, r, deltaTime * 5);
-
-                var add = move * _player.moveSpeed * deltaTime;
-
-                wt.position += add;
-            }
-        });
-
     // camera updating
     engine.world().view<scene::Transform, PlayerCamera>().each(
         [&](ecs::Entity e, scene::Transform& wt, PlayerCamera& _cam)
@@ -83,5 +42,43 @@ void update_player(Engine& engine, float deltaTime)
             offset += math::vec3{0, _cam.yValue, 0};
             wt.position = playerPosition + offset;
             wt.look_at( playerPosition + math::vec3{0, _cam.yLookOffset, 0} );
+        });
+}
+
+void update_player_movement(Engine& engine, float dt)
+{
+    var& w = engine.world();
+    var cameraEntity = w.view<PlayerCamera>().first();
+    if (cameraEntity == ecs::null_entity)
+        return;
+
+    w.view<scene::Transform, Player, physics::CharacterController>().each(
+        [&](ecs::Entity e, scene::Transform& wt, Player& p, physics::CharacterController& cc)
+        {
+            var camForward = w.get<scene::Transform>(cameraEntity).forward();
+            camForward.y = 0;
+            camForward = math::normalize(camForward);
+            wt.rotation = math::look_rotation(-camForward, math::vec3{0, 1, 0});
+
+            const var moveAxis = engine.actions().axis2(engine.actions().find("move"));
+            var move = -wt.forward() * moveAxis.y + wt.right() * moveAxis.x;
+            if (math::dot(move, move) > 1.0f)
+                move = math::normalize(move); // only clamp, so half-tilted sticks stay half speed
+
+            if (cc.grounded)
+            {
+                p.verticalVelocity = -1.0f; // small push into the ground keeps slopes grounded
+                if (engine.actions().pressed(engine.actions().find("jump")))
+                    p.verticalVelocity = p.jumpSpeed;
+            }
+            else
+            {
+                if (cc.hitCeiling && p.verticalVelocity > 0.0f)
+                    p.verticalVelocity = 0.0f;
+                p.verticalVelocity -= p.gravity * dt;
+            }
+
+            const math::vec3 vel = move * p.moveSpeed + math::vec3{0, p.verticalVelocity, 0};
+            engine.physics().move_character(w, e, vel * dt);
         });
 }

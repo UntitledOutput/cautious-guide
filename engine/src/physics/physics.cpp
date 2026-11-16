@@ -358,6 +358,30 @@ namespace physics
         }
     }
 
+    void PhysicsWorld::overlap_capsule(ecs::World& w, math::vec3 center, float radius, float halfHeight,
+                                       std::vector<Overlap>& out, const CastFilter& filter) const
+    {
+        Collider probe;
+        probe.shape = ShapeType::Capsule;
+        probe.capsule = {radius, halfHeight};
+        const ShapeView pv{center, &probe};
+
+        w.view<scene::Transform, Collider>().each(
+            [&](ecs::Entity e, scene::Transform& t, Collider& c)
+            {
+                if (e == filter.ignore || !(c.layer & filter.mask) || (c.isTrigger && !filter.hitTriggers))
+                    return;
+
+                const NarrowFn fn = kNarrow[size_t(ShapeType::Capsule)][size_t(c.shape)];
+                if (!fn)
+                    return;
+
+                const ShapeView ov{t.position + c.offset, &c, c.shape == ShapeType::Mesh ? mesh(c.mesh.id) : nullptr};
+                if (const auto m = fn(pv, ov))
+                    out.push_back({e, -m->normal, m->depth, m->surface});
+            });
+    }
+
     void PhysicsWorld::collide()
     {
         auto view_of = [this](const InternalPhysicsBody& b)

@@ -30,6 +30,7 @@ namespace graphics
     {
         std::string vertexSource;
         std::string fragmentSource;
+        std::string computeSource;
     };
 
     struct TextureDescriptor
