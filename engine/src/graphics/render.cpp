@@ -104,6 +104,13 @@ namespace
         return program;
     }
 
+    uint make_compute_shader(const graphics::ComputeShaderDescriptor& c) {
+        uint shader = make_shader(GL_COMPUTE_SHADER, c.computeSource);
+        var program = make_program(&shader,1);
+
+        return program;
+    }
+
     uint make_texture(const graphics::TextureDescriptor& d)
     { 
         GLenum internal = GL_RGBA8;
@@ -414,6 +421,11 @@ TextureHandle RenderMgr::create_texture(const TextureDescriptor& descriptor)
 {
     textures.push_back(GpuTexture(make_texture(descriptor)));
     return TextureHandle(textures.size() - 1);
+}
+
+ComputeShaderHandle graphics::RenderMgr::create_compute_shader(const ComputeShaderDescriptor& descriptor)
+{
+    return ComputeShaderHandle();
 }
 
 void RenderMgr::submit_draw_call(const DrawCall& drawCall)

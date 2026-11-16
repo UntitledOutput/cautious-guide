@@ -18,6 +18,7 @@ namespace graphics
     using MaterialHandle = u32;
     using ShaderHandle = u32;
     using TextureHandle = u32;
+    using ComputeShaderHandle = u32;
 
     struct MeshDescriptor
     {
@@ -109,6 +110,8 @@ namespace graphics
         MaterialHandle create_material(const ShaderHandle& shader);
         MeshHandle create_mesh(const MeshDescriptor& descriptor);
         TextureHandle create_texture(const TextureDescriptor& descriptor);
+        ComputeShaderHandle create_compute_shader(const ComputeShaderDescriptor& descriptor);
+
         void submit_draw_call(const DrawCall& drawCall);
 
         void screenshot(std::string filename);
@@ -139,6 +142,10 @@ namespace graphics
 
         struct GpuComputeShader
         {
+            u32 handle;
+
+            
+
             u32 ssbo;
             size_t dataSize;
         };
@@ -162,6 +169,7 @@ namespace graphics
         std::vector<Material> materials;
         std::vector<GpuShader> shaders;
         std::vector<GpuTexture> textures;
+        std::vector<GpuComputeShader> compute_shaders;
 
         TextureHandle whiteTexture = 0, blackTexture = 0, normalTexture = 0;
 
