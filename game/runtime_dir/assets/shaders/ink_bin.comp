@@ -1,0 +1,58 @@
+#version 450 core
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly  buffer Particles  { InkParticle particles[]; };
+layout(std430, binding = 1)           buffer TileCounts { uint tileCounts[]; };
+layout(std430, binding = 2) writeonly buffer TileLists  { uint tileLists[]; };
+
+uniform mat4  uViewProj;
+uniform vec2  uScreenSize;
+uniform uvec2 uTileCount;
+uniform uint  uParticleCount;
+uniform float uBlendK;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uParticleCount) return;
+
+    vec4 p = particles[i].posRadius;
+    if (p.w <= 0.0) return;
+
+    // smooth-min reaches k past the surface, so pad the bounds by it
+    float R = p.w + uBlendK;
+
+    vec2 mn = vec2( 1e9);
+    vec2 mx = vec2(-1e9);
+    bool crossesNear = false;
+    for (int c = 0; c < 8; ++c) {
+        vec3 corner = p.xyz + R * vec3((c & 1) != 0 ? 1.0 : -1.0,
+                                       (c & 2) != 0 ? 1.0 : -1.0,
+                                       (c & 4) != 0 ? 1.0 : -1.0);
+        vec4 clip = uViewProj * vec4(corner, 1.0);
+        if (clip.w <= 1e-4) { crossesNear = true; break; }
+        vec2 ndc = clip.xy / clip.w;
+        mn = min(mn, ndc);
+        mx = max(mx, ndc);
+    }
+
+    if (crossesNear) {
+        mn = vec2(-1.0);
+        mx = vec2( 1.0);
+    } else if (any(lessThan(mx, vec2(-1.0))) || any(greaterThan(mn, vec2(1.0)))) {
+        return;
+    }
+
+    vec2  toTiles = uScreenSize / float(TILE_SIZE);
+    ivec2 t0 = ivec2(floor((clamp(mn, -1.0, 1.0) * 0.5 + 0.5) * toTiles));
+    ivec2 t1 = ivec2(floor((clamp(mx, -1.0, 1.0) * 0.5 + 0.5) * toTiles));
+    t0 = clamp(t0, ivec2(0), ivec2(uTileCount) - 1);
+    t1 = clamp(t1, ivec2(0), ivec2(uTileCount) - 1);
+
+    for (int y = t0.y; y <= t1.y; ++y) {
+        for (int x = t0.x; x <= t1.x; ++x) {
+            uint tile = uint(y) * uTileCount.x + uint(x);
+            uint slot = atomicAdd(tileCounts[tile], 1u);
+            if (slot < MAX_PER_TILE) tileLists[tile * MAX_PER_TILE + slot] = i;
+        }
+    }
+}

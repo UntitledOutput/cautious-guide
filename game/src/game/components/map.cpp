@@ -21,6 +21,7 @@ void setup_map(Engine& engine, ecs::Entity map) {
     gc.mesh.id = engine.collision_mesh(mapModelHandle,gt.scale);
     gc.layer = 1 << 0; // L_Ground
     engine.world().get<ecs::Name>(map).value = "Map";
+    engine.world().add<scene::Transform>(map);
 
     scene::attach(engine.world(),model,map);
 }

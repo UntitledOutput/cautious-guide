@@ -1,0 +1,62 @@
+#version 450 core
+// #include "paint_common.glsl"
+//
+// Applies every splat that hit this object this frame in one dispatch.
+// Dispatch: ceil(w/8) x ceil(h/8) over the object's paint map.
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+struct Splat {
+    vec4 centerRadius;  // object space center, full-strength radius
+    vec4 normalFalloff; // object space hit normal, outer radius = radius * w (Unity used 5)
+    vec4 params;        // x = team, y = strength, z = noise amount 0..1
+};
+
+layout(std430, binding = 0) readonly buffer Splats {
+    Splat splats[];
+};
+
+layout(rg8, binding = 0) uniform image2D uPaint;
+layout(binding = 1) uniform sampler2D      uPositionMap;
+layout(binding = 2) uniform sampler2D      uNormalMap;
+layout(binding = 3) uniform sampler2DArray uNoise;
+
+uniform uint  uSplatCount;
+uniform float uNoiseScale; // 15 in the Unity version
+
+void main() {
+    ivec2 px   = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(uPaint);
+    if (any(greaterThanEqual(px, size))) return;
+
+    vec4 posIsland = texelFetch(uPositionMap, px, 0);
+    if (posIsland.w < 0.5) return;
+
+    vec3  pos   = posIsland.xyz;
+    vec3  n     = texelFetch(uNormalMap, px, 0).xyz;
+    vec2  uv    = (vec2(px) + 0.5) / vec2(size);
+    float noise = textureLod(uNoise, vec3(uv * uNoiseScale, 0.0), 0.0).r;
+
+    PaintSample s = decodePaint(imageLoad(uPaint, px));
+    bool changed = false;
+
+    for (uint i = 0u; i < uSplatCount; ++i) {
+        Splat sp = splats[i];
+
+        float r     = sp.centerRadius.w;
+        float outer = max(r * sp.normalFalloff.w, r + 1e-4);
+        float d     = distance(pos, sp.centerRadius.xyz);
+        if (d >= outer) continue;
+
+        float f = 1.0 - smoothstep(r, outer, d);
+        f *= mix(1.0, noise, sp.params.z);
+        f *= smoothstep(0.0, 0.3, dot(n, sp.normalFalloff.xyz)); // stops paint bleeding through thin walls
+        f *= sp.params.y;
+        if (f <= 0.0) continue;
+
+        s = applySplat(s, int(sp.params.x), f);
+        changed = true;
+    }
+
+    if (changed) imageStore(uPaint, px, encodePaint(s));
+}

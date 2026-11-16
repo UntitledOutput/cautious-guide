@@ -78,8 +78,8 @@ int Engine::start(GameCtrl& game)
         _window->render_ui();
 
         if (_frame_count == 15) {
-            _renderMgr->screenshot("screenshot.png");
-            _running = false; // for the remote test, we just want to take a screenshot and exit
+            //_renderMgr->screenshot("screenshot.png");
+            //_running = false; // for the remote test, we just want to take a screenshot and exit
         }
 
         _window->present();

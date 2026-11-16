@@ -235,7 +235,10 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
     ImGui::Begin("value tweaking");
     
     var entity =
-        engine.world().view<ecs::Name>().find([](ecs::Entity, ecs::Name& n) { return n.value == "Map"; });
+        engine.world().view<ecs::Name>().find([](ecs::Entity, ecs::Name& n)
+        {
+            return n.value == "Map";
+        });
     var& component = engine.world().get<scene::Transform>(entity);
 
     float s = component.scale.x;
