@@ -204,8 +204,7 @@ void MatchScene::on_update(GameCtrl& game, Engine& engine, float delta)
     {
         var& w = engine.world();
         var cam = w.view<graphics::Camera>().first();
-        2222122222321xxxxxxxxxxxxxxxx
-        oobooboobf (cam != ecs::null_entity)21
+        if (cam != ecs::null_entity)
         {
             if (w.contains<FreeCam>(cam))
             {
