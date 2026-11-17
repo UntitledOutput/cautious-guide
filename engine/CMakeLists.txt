@@ -25,7 +25,7 @@ target_include_directories(engine
     ${IMGUI_INCLUDE_DIRS}
     include # path to glad.h and khrplatform.h
 
-    thirdparty/gif-h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/gif-h
 )
 
 target_link_libraries(engine PRIVATE

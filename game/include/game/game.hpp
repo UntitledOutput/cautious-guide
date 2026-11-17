@@ -16,6 +16,7 @@ struct SplatGame : GameCtrl
     void load_new_state(std::unique_ptr<GameState> state);
 
     std::unique_ptr<fx::PaintMgr> paint;
+    std::unique_ptr<fx::ParticleMgr> particles;
 
 private:
     ecs::CommandBuffer commandBuffer;

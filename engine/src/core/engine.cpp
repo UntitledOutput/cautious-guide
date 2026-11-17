@@ -5,6 +5,8 @@
 
 #include "graphics/model.hpp"
 #include "graphics/render.hpp"
+#include <chrono>
+#include <format>
 
 
 static void APIENTRY gl_debug_callback(GLenum, GLenum, GLuint, GLenum severity, GLsizei, const GLchar* msg, const void*)
@@ -77,9 +79,12 @@ int Engine::start(GameCtrl& game)
         _renderMgr->flush();
         _window->render_ui();
 
-        if (_frame_count == 15) {
-            //_renderMgr->screenshot("screenshot.png");
-            //_running = false; // for the remote test, we just want to take a screenshot and exit
+        constexpr int gif_frames = 60;
+        if (_frame_count < gif_frames)
+            _gif->capture_frame(_window->framebuffer_width(), _window->framebuffer_height());
+        if (_frame_count == gif_frames - 1) {
+            _gif->save("screenshot.gif");
+            _running = false; // for the remote test, we just want to take a capture and exit
         }
 
         _window->present();

@@ -7,6 +7,7 @@
 #include "loaders/bfres/sarc.hpp"
 #include "states/main_state.hpp"
 #include "states/state_base.hpp"
+#include "fx/particle.hpp"
 
 static graphics::ShaderHandle defaultShader;
 
@@ -66,6 +67,14 @@ void SplatGame::on_init(Engine& engine)
     paintShaders.splat = r.create_compute_shader({fs.read_file_str("assets/shaders/paint_splat.comp")});
     paintShaders.extend = r.create_compute_shader({fs.read_file_str("assets/shaders/paint_extend.comp")});
     paint = std::make_unique<fx::PaintMgr>(r, paintShaders);
+
+    fx::ParticleShaderContainer particleShaders;
+    particleShaders.emit   = r.create_compute_shader({fs.read_file_str("assets/shaders/particle_emit.comp")});
+    particleShaders.update = r.create_compute_shader({fs.read_file_str("assets/shaders/particle_update.comp")});
+    particleShaders.render = r.create_shader(
+        {fs.read_file_str("assets/shaders/particle.vert"), fs.read_file_str("assets/shaders/particle.frag")});
+    particles = std::make_unique<fx::ParticleMgr>(r, particleShaders);
+
 }
 
 

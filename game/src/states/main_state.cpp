@@ -32,7 +32,7 @@ void BootState::on_enter(GameCtrl& game, Engine& engine)
     GameState::on_enter(game, engine);
 
     var splatGame = dynamic_cast<SplatGame*>(&game);
-    splatGame->load_new_state(std::make_unique<MatchScene>());
+    splatGame->load_new_state(std::make_unique<DebugState>());
 }
 
 void BootState::on_exit(GameCtrl& game, Engine& engine)
@@ -242,4 +242,46 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
     ImGui::Image((ImTextureRef)debugImage,ImVec2(100,100));
 
     ImGui::End();
+}
+
+// debug scene
+
+void DebugState::on_enter(GameCtrl& game, Engine& engine)
+{
+
+    
+    GameState::on_enter(game, engine);
+    var cam = engine.world().create();
+    engine.world().add<graphics::Camera>(cam);
+    engine.world().add<scene::Transform>(cam);
+    engine.world().get<scene::Transform>(cam).position = {5, 5, 5};
+    engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
+
+    var emitter = engine.world().create();
+    var& pe = engine.world().add<fx::ParticleEmitter>(emitter, game_.particles->create_emitter(10000));
+    pe.size = 0.08f;
+    pe.lifetime = 2.5f;
+
+}
+
+void DebugState::on_exit(GameCtrl& game, Engine& engine)
+{
+}
+
+void DebugState::on_update(GameCtrl& game, Engine& engine, float delta)
+{
+}
+
+void DebugState::on_fixed_update(GameCtrl& game, Engine& engine, float delta)
+{
+}
+
+void DebugState::on_render(GameCtrl& game, Engine& engine, float delta)
+{
+
+    scene::update_world_transforms(engine.world(), engine.models());
+    scene::render_models(engine.world(), engine.models(), engine.renderer());
+
+    debug::updateDebugMenu(engine, delta);
+
 }

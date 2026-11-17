@@ -1,0 +1,21 @@
+#version 450 core
+layout(local_size_x = 64) in;
+
+struct Particle { vec4 positionLife; vec4 velocitySize; vec4 color; };
+layout(std430) buffer Instances { Particle particles[]; };
+
+layout(std140) uniform Params { vec4 gravity; float dt; float drag; uint capacity; };
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= capacity) return;
+    Particle p = particles[i];
+    if (p.positionLife.w <= 0.0) return;
+
+    p.velocitySize.xyz += gravity.xyz * dt;
+    p.velocitySize.xyz *= exp(-drag * dt);
+    p.positionLife.xyz += p.velocitySize.xyz * dt;
+    p.positionLife.w   -= dt;
+    particles[i] = p;
+}

@@ -16,6 +16,8 @@
 #include "core/input.hpp"
 #include "graphics/model.hpp"
 #include "physics/world.hpp"
+#include "graphics/gif_recorder.hpp"
+
 
 namespace graphics
 {
@@ -70,6 +72,8 @@ public:
     void regen_world();
 
     int frame_count() ret(_frame_count);
+    graphics::GifRecorder& gif() ret(*_gif);
+
 
     physics::MeshId collision_mesh(graphics::ModelHandle model, math::vec3 scale = {1, 1, 1});
 
@@ -94,6 +98,7 @@ private:
     std::unique_ptr<input::Input> _input;
     std::unique_ptr<::input::ActionMap> _actions;
     std::unique_ptr<graphics::RenderMgr> _renderMgr;
+    std::unique_ptr<graphics::GifRecorder> _gif = std::make_unique<graphics::GifRecorder>();
 
     std::unique_ptr<graphics::ModelCache> _models;
     std::unique_ptr<ecs::World> _world;
