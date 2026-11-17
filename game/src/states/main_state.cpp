@@ -259,6 +259,7 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
     engine.world().add<scene::Transform>(cam);
     engine.world().get<scene::Transform>(cam).position = {0, 1, 5};
     engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
+    engine.world().add<FreeCam>(cam);
 
     var emitter = engine.world().create();
     var& pe = engine.world().add<fx::ParticleEmitter>(emitter, game_.particles->create_emitter(10000));
@@ -280,12 +281,17 @@ void DebugState::on_exit(GameCtrl& game, Engine& engine)
 
 void DebugState::on_update(GameCtrl& game, Engine& engine, float delta)
 {
+    if (engine.input().key_press(SDL_SCANCODE_ESCAPE))
+        engine.input().toggle_mouse_captured();
+
     var& game_ = dynamic_cast<SplatGame&>(game);
     engine.world().view<fx::ParticleEmitter>().each([&](ecs::Entity, fx::ParticleEmitter& pe)
     {
         // fountain: straight up with some spread
-        game_.particles->emit(pe, {0, 1, 0}, {0, 6, 0}, 2.0f, 40, {1.0f, 0.5f, 0.1f, 1.0f});
+        game_.particles->emit(pe, {0, 1, 0}, {0, 15, 0}, 10.0f, 40, {1.0f, 0.5f, 0.1f, 1.0f});
     });
+
+    free_cam(engine, delta);
 
     graphics::update_camera(engine);
 }
