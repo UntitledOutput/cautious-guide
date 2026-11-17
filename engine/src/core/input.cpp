@@ -1,6 +1,7 @@
 #include "core/input.hpp"
 #include <SDL.h>
 #include <algorithm>
+#include <imgui.h>
 
 using namespace input;
 
@@ -134,7 +135,18 @@ float Input::pad_axis(u8 axis) const
 
 void Input::set_mouse_captured(bool captured)
 {
+    ImGuiIO& io = ImGui::GetIO();
+
     SDL_SetRelativeMouseMode(captured ? SDL_TRUE : SDL_FALSE);
+
+    if (captured)
+    {
+        io.ConfigFlags |= ImGuiConfigFlags_NoMouse;
+    }
+    else
+    {
+        io.ConfigFlags &= ~ImGuiConfigFlags_NoMouse;
+    }
     mouse_captured = captured;
 }
 

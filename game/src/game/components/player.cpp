@@ -28,18 +28,22 @@ void update_player(Engine& engine, SplatGame& game, float deltaTime)
                 _cam.yValue += (yV * _cam.ySensitivity) * deltaTime;
                 _cam.yValue = std::clamp(_cam.yValue, 0.f, 1.f);
 
-                var& w = engine.world(); 
-                var ct = w.get<scene::Transform>(e);
-                var dir = math::rotate(ct.rotation, math::vec3{0, 0, -1});
-
-                var hit = engine.physics().raycast(w, ct.position, dir, 500.0f, physics::CastFilter{1 << 0});
-                //std::printf("[paint] hit=%d\n", hit.has_value());
-                if (hit)
+                if (engine.input().mouse_down(1))
                 {
-                    var* m = w.try_get<Map>(hit->entity);
-                    if (m)
-                        game.paint->apply_paint(w.get<fx::PaintableObject>(m->model),
-                                                                          hit->point, hit->normal, 0, 2.0f);
+
+                    var& w = engine.world();
+                    var ct = w.get<scene::Transform>(e);
+                    var dir = math::rotate(ct.rotation, math::vec3{0, 0, -1});
+
+                    var hit = engine.physics().raycast(w, ct.position, dir, 500.0f, physics::CastFilter{1 << 0});
+                    // std::printf("[paint] hit=%d\n", hit.has_value());
+                    if (hit)
+                    {
+                        var* m = w.try_get<Map>(hit->entity);
+                        if (m)
+                            game.paint->apply_paint(w.get<fx::PaintableObject>(m->model), hit->point, hit->normal, 0,
+                                                    2.0f);
+                    }
                 }
             }
 
