@@ -24,6 +24,8 @@ target_include_directories(engine
     ${TINYGLTF_INCLUDE_DIRS}
     ${IMGUI_INCLUDE_DIRS}
     include # path to glad.h and khrplatform.h
+
+    thirdparty/gif-h
 )
 
 target_link_libraries(engine PRIVATE
