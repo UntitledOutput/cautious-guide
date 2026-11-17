@@ -108,9 +108,9 @@ namespace fx
             var d = renderer.make_dispatch(shaders.update);
             d.groups = renderer.groups_for(shaders.update, e.capacity);
             renderer.set_dispatch_buffer(d, "Instances", e.particleBuffer, graphics::Access::ReadWrite);
-            renderer.set_dispatch_param(d, "gravity", gravity);
+            renderer.set_dispatch_param(d, "gravity", e.gravity);
             renderer.set_dispatch_param(d, "dt", dt);
-            renderer.set_dispatch_param(d, "drag", drag);
+            renderer.set_dispatch_param(d, "drag", e.drag);
             renderer.set_dispatch_param(d, "capacity", e.capacity);
             renderer.submit_dispatch(std::move(d));
 

@@ -79,7 +79,7 @@ int Engine::start(GameCtrl& game)
         _renderMgr->flush();
         _window->render_ui();
 
-        constexpr int gif_frames = 60;
+        constexpr int gif_frames = 120;
         if (_frame_count < gif_frames)
             _gif->capture_frame(_window->framebuffer_width(), _window->framebuffer_height());
         if (_frame_count == gif_frames - 1) {

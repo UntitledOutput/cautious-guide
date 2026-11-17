@@ -15,6 +15,7 @@
 #include "graphics/camera.hpp"
 #include "loaders/bfres/sarc.hpp"
 #include "scene/transform_system.hpp"
+#include "fx/particle.hpp"
 
 
 // base state
@@ -248,19 +249,28 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
 
 void DebugState::on_enter(GameCtrl& game, Engine& engine)
 {
-
-    
     GameState::on_enter(game, engine);
+
+    var& game_ = dynamic_cast<SplatGame&>(game);
+
+
     var cam = engine.world().create();
     engine.world().add<graphics::Camera>(cam);
     engine.world().add<scene::Transform>(cam);
-    engine.world().get<scene::Transform>(cam).position = {5, 5, 5};
+    engine.world().get<scene::Transform>(cam).position = {0, 1, 5};
     engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
 
     var emitter = engine.world().create();
     var& pe = engine.world().add<fx::ParticleEmitter>(emitter, game_.particles->create_emitter(10000));
     pe.size = 0.08f;
     pe.lifetime = 2.5f;
+    pe.collide = true;
+    pe.bounce = 0.5f;
+    pe.lifetimeLoss = 0.5f; 
+
+    // add test area for paint testing
+    var map = engine.world().create();
+    setup_map(engine, map, *game_.paint);
 
 }
 
@@ -270,6 +280,14 @@ void DebugState::on_exit(GameCtrl& game, Engine& engine)
 
 void DebugState::on_update(GameCtrl& game, Engine& engine, float delta)
 {
+    var& game_ = dynamic_cast<SplatGame&>(game);
+    engine.world().view<fx::ParticleEmitter>().each([&](ecs::Entity, fx::ParticleEmitter& pe)
+    {
+        // fountain: straight up with some spread
+        game_.particles->emit(pe, {0, 1, 0}, {0, 6, 0}, 2.0f, 40, {1.0f, 0.5f, 0.1f, 1.0f});
+    });
+
+    graphics::update_camera(engine);
 }
 
 void DebugState::on_fixed_update(GameCtrl& game, Engine& engine, float delta)
@@ -278,10 +296,11 @@ void DebugState::on_fixed_update(GameCtrl& game, Engine& engine, float delta)
 
 void DebugState::on_render(GameCtrl& game, Engine& engine, float delta)
 {
-
     scene::update_world_transforms(engine.world(), engine.models());
     scene::render_models(engine.world(), engine.models(), engine.renderer());
 
-    debug::updateDebugMenu(engine, delta);
+    var& particles = *dynamic_cast<SplatGame&>(game).particles;
+    particles.flush(engine.world(), delta);
 
+    debug::updateDebugMenu(engine, delta);
 }

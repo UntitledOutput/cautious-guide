@@ -4,6 +4,7 @@
 #include "fx/paint.hpp"
 #include "graphics/model.hpp"
 #include "states/state_base.hpp"
+#include "fx/particle.hpp"
 
 struct SplatGame : GameCtrl
 {

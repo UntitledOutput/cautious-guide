@@ -36,6 +36,13 @@ namespace fx
         float size = 0.1f;
         float lifetime = 2.0f;
         std::vector<EmitRequest> pending;
+
+        math::vec4 gravity = {0, -9.8f, 0, 0};
+        float drag = 0.5f;
+
+        bool collide = false;
+        float bounce = 0.5f;
+        float lifetimeLoss = 0.5f;
     };
 
     class ParticleMgr {
@@ -44,9 +51,6 @@ namespace fx
         ParticleEmitter create_emitter(u32 capacity);
         void emit(ParticleEmitter& e, math::vec3 pos, math::vec3 vel, float spread, u32 count, math::vec4 color);
         void flush(ecs::World& world, float dt); // before RenderMgr::flush
-
-        math::vec4 gravity = {0, -9.8f, 0, 0};
-        float drag = 0.5f;
     private:
         graphics::RenderMgr& renderer;
         ParticleShaderContainer shaders;
