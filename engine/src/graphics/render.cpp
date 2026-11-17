@@ -25,13 +25,14 @@ namespace
         bool is_int = false;
     };
 
-    // index in this table = attribute location, so shaders can use layout(location = N)
+    
     constexpr AttribInfo attribs[] = {
         {VertexFormat::Position, 3, offsetof(Vertex, position)},
         {VertexFormat::Normal, 3, offsetof(Vertex, normal)},
         {VertexFormat::UV0, 2, offsetof(Vertex, uv0)},
         {VertexFormat::Joints,4, offsetof(Vertex, joints), true},
-        {VertexFormat::Weights,4, offsetof(Vertex, weights)}
+        {VertexFormat::Weights,4, offsetof(Vertex, weights)},
+        {VertexFormat::UV1, 2, offsetof(Vertex, uv1)}
     };
 
     constexpr GLuint joint_binding = 3;
@@ -70,7 +71,7 @@ namespace
             glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &len);
             std::string log(size_t(std::max(len, 1)), '\0');
             glGetShaderInfoLog(shader, len, nullptr, log.data());
-           throw_error(std::format("[shader] %s compile failed:\n%s\n",
+           throw_error(std::format("[shader] {} compile failed:\n{}\n",
                          type == GL_VERTEX_SHADER         ? "vertex"
                              : type == GL_FRAGMENT_SHADER ? "fragment"
                                                           : "compute",
@@ -153,6 +154,19 @@ namespace
     }
 
 
+    uint make_attachment(int width, int height, GLenum internal)
+    {
+        uint tex = 0;
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexStorage2D(GL_TEXTURE_2D, 1, internal, width, height);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        return tex;
+    }
+
     void apply_state(const graphics::RenderState& s, graphics::RenderState& cur, bool force)
     {
         if (force || s.blend != cur.blend)
@@ -174,7 +188,7 @@ namespace
         cur = s;
     }
 
-    // immutable storage can't be resized, so allocate a bigger one and copy over
+    
     uint grow_buffer(uint old, GLsizeiptr usedBytes, GLsizeiptr newBytes)
     {
         uint buf = make_buffer(newBytes);
@@ -282,7 +296,7 @@ namespace
         bind_block("Camera", camera_binding);
         bind_block("Object", object_binding);
 
-        // storage blocks: engine-owned names get fixed bindings, everything else is numbered per program
+        
         GLint maxSsbo = 0;
         glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &maxSsbo);
 
@@ -311,7 +325,7 @@ namespace
             layout.storageBlocks[std::move(name)] = binding;
         }
 
-        // loose uniforms: samplers get texture units, images get image units
+        
         GLint count = 0;
         glGetProgramInterfaceiv(program, GL_UNIFORM, GL_ACTIVE_RESOURCES, &count);
         u32 unit = 0, imageUnit = 0;
@@ -339,7 +353,7 @@ namespace
     }
 
 
-} // namespace
+} 
 
 using namespace graphics;
 
@@ -375,7 +389,7 @@ RenderMgr::RenderMgr(const RenderConfiguration& cfg)
         const byte px[4] = {r, g, b, 255};
         return create_texture({1, 1, px, GL_RGBA});
     };
-    whiteTexture = solid(255, 255, 255); // first, so handle 0 is white
+    whiteTexture = solid(255, 255, 255); 
     blackTexture = solid(0, 0, 0);
     normalTexture = solid(128, 128, 255);
     glEnable(GL_FRAMEBUFFER_SRGB);
@@ -411,7 +425,7 @@ u32 RenderMgr::push_joints(std::span<const math::mat4> joints)
 
 ShaderHandle RenderMgr::create_shader(const ShaderDescriptor& descriptor) {
 
-    uint* _shaders = new uint[2]; // todo: allow multiple stages
+    uint* _shaders = new uint[2]; 
     _shaders[0] = make_shader(GL_VERTEX_SHADER,descriptor.vertexSource.c_str());
     _shaders[1] = make_shader(GL_FRAGMENT_SHADER,descriptor.fragmentSource.c_str());
     
@@ -506,6 +520,58 @@ TextureHandle RenderMgr::create_texture(const TextureDescriptor& descriptor)
     return TextureHandle(textures.size() - 1);
 }
 
+RenderTargetHandle RenderMgr::create_render_target(const RenderTargetDescriptor& descriptor)
+{
+    if (descriptor.colorFormats.empty() && !descriptor.depthFormat)
+        throw_error("render target has no attachments");
+
+    uint fbo = 0;
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+    GpuRenderTarget target(fbo);
+    target.width = descriptor.width;
+    target.height = descriptor.height;
+    target.clearColor = descriptor.clearColor;
+
+    std::vector<GLenum> drawBuffers;
+    for (u32 i = 0; i < descriptor.colorFormats.size(); ++i)
+    {
+        GpuTexture tex(make_attachment(descriptor.width, descriptor.height, descriptor.colorFormats[i]));
+        tex.format = descriptor.colorFormats[i];
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, tex.handle, 0);
+        drawBuffers.push_back(GL_COLOR_ATTACHMENT0 + i);
+
+        textures.push_back(std::move(tex));
+        target.colors.push_back(TextureHandle(textures.size() - 1));
+    }
+
+    if (descriptor.depthFormat)
+    {
+        GpuTexture tex(make_attachment(descriptor.width, descriptor.height, descriptor.depthFormat));
+        tex.format = descriptor.depthFormat;
+        const bool stencil = descriptor.depthFormat == GL_DEPTH24_STENCIL8 || descriptor.depthFormat == GL_DEPTH32F_STENCIL8;
+        glFramebufferTexture2D(GL_FRAMEBUFFER, stencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
+                               tex.handle, 0);
+
+        textures.push_back(std::move(tex));
+        target.depth = TextureHandle(textures.size() - 1);
+    }
+
+    if (drawBuffers.empty())
+        glDrawBuffer(GL_NONE);
+    else
+        glDrawBuffers(GLsizei(drawBuffers.size()), drawBuffers.data());
+
+    const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (status != GL_FRAMEBUFFER_COMPLETE)
+        throw_error(std::format("render target is incomplete (0x{:x})", status));
+
+    targets.push_back(std::move(target));
+    return RenderTargetHandle(targets.size() - 1);
+}
+
 BufferHandle RenderMgr::create_buffer(const BufferDescriptor& d)
 {
     if (d.size == 0)
@@ -514,11 +580,11 @@ BufferHandle RenderMgr::create_buffer(const BufferDescriptor& d)
         throw_error("buffer initial data is bigger than the buffer");
 
     GpuBuffer b;
-    b.handle = make_buffer(GLsizeiptr(d.size)); // leaves it bound to GL_COPY_WRITE_BUFFER
+    b.handle = make_buffer(GLsizeiptr(d.size)); 
     b.size = d.size;
     b.usage = d.usage;
 
-    // immutable storage starts undefined; zero it so compute can treat 0 as "uninitialised"
+    
     glClearBufferData(GL_COPY_WRITE_BUFFER, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, nullptr);
     if (!d.initialData.empty())
         upload(b.handle, 0, GLsizeiptr(d.initialData.size()), d.initialData.data());
@@ -543,7 +609,7 @@ void RenderMgr::resize_buffer(BufferHandle h, size_t newSize)
         return;
 
     const size_t keep = std::min(b.size, newSize);
-    b.handle = grow_buffer(b.handle, GLsizeiptr(keep), GLsizeiptr(newSize)); // new one is on COPY_WRITE
+    b.handle = grow_buffer(b.handle, GLsizeiptr(keep), GLsizeiptr(newSize)); 
     if (newSize > keep)
         glClearBufferSubData(GL_COPY_WRITE_BUFFER, GL_R8UI, GLintptr(keep), GLsizeiptr(newSize - keep),
                              GL_RED_INTEGER, GL_UNSIGNED_BYTE, nullptr);
@@ -603,7 +669,7 @@ void RenderMgr::set_dispatch_buffer(ComputeDispatch& d, std::string_view block, 
     const auto& blocks = compute_shaders.at(d.shader).layout.storageBlocks;
     auto it = blocks.find(std::string(block));
     if (it == blocks.end())
-        return; // optimized out; a typo is caught by submit_dispatch's "never bound" check
+        return; 
 
     d.bindings.push_back({ComputeBinding::Kind::Buffer, it->second, buffer, access});
 }
@@ -653,7 +719,7 @@ void RenderMgr::run_dispatches()
     if (dispatches.empty())
         return;
 
-    // pack every dispatch's params into one UBO upload, one materialStride slot each
+    
     const u32 n = u32(dispatches.size());
     if (n > computeParamsCap)
     {
@@ -708,8 +774,8 @@ void RenderMgr::run_dispatches()
 
         glDispatchCompute(d.groups.x, d.groups.y, d.groups.z);
 
-        // conservative: makes every write visible to every later use.
-        // step 5 replaces this with per-resource tracking using ComputeBinding::access + BufferUsage.
+        
+        
         glMemoryBarrier(GL_ALL_BARRIER_BITS);
     }
 
@@ -743,7 +809,7 @@ void RenderMgr::screenshot(std::string filename)
     int width = viewport[2];
     int height = viewport[3];
 
-    char *data = (char*) malloc((size_t) (width * height * 3)); // 3 components (R, G, B)
+    char *data = (char*) malloc((size_t) (width * height * 3)); 
 
     if (!data)
         return;
@@ -751,7 +817,7 @@ void RenderMgr::screenshot(std::string filename)
     glPixelStorei(GL_PACK_ALIGNMENT, 1);
     glReadPixels(x, y, width, height, GL_RGB, GL_UNSIGNED_BYTE, data);
 
-    stbi_flip_vertically_on_write(1); // Flip the image vertically
+    stbi_flip_vertically_on_write(1); 
     stbi_write_png(filename.c_str(), width, height, 3, data, 0);
 
     free(data);
@@ -760,7 +826,7 @@ void RenderMgr::screenshot(std::string filename)
 void RenderMgr::flush()
 {
     glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE); // a transparent material from last frame can leave this off, and then the clear skips depth
+    glDepthMask(GL_TRUE); 
     glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -769,6 +835,8 @@ void RenderMgr::flush()
     std::sort(drawCalls.begin(), drawCalls.end(),
               [this](const DrawCall& a, const DrawCall& b)
               {
+                  if (a.target != b.target)
+                      return a.target < b.target; 
                   const bool ta = materials[a.material].state.blend, tb = materials[b.material].state.blend;
                   if (ta != tb)
                       return !ta;
@@ -808,18 +876,54 @@ void RenderMgr::flush()
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, joint_binding, jointBuffer);
     }
 
-    run_dispatches();
+    GLint windowViewport[4];
+    glGetIntegerv(GL_VIEWPORT, windowViewport);
 
     uint curProgram = 0;
     uint curVao = 0;
     u32 curMaterial = UINT32_MAX;
+    u32 curTarget = invalid_handle;
     RenderState curState{};
     bool firstState = true;
+    bool dispatched = false;
 
     for (u32 i = 0; i < count; ++i)
     {
         const DrawCall& dc = drawCalls[i];
         const GpuMesh& mesh = meshes[dc.mesh];
+
+        
+        if (dc.target == invalid_handle && !dispatched)
+        {
+            if (curTarget != invalid_handle)
+            {
+                glBindFramebuffer(GL_FRAMEBUFFER, 0);
+                glViewport(windowViewport[0], windowViewport[1], windowViewport[2], windowViewport[3]);
+                curTarget = invalid_handle;
+            }
+            run_dispatches();
+            dispatched = true;
+            curProgram = 0;
+        }
+
+        if (dc.target != curTarget)
+        {
+            const GpuRenderTarget& t = targets[dc.target];
+            glBindFramebuffer(GL_FRAMEBUFFER, t.fbo);
+            glViewport(0, 0, t.width, t.height);
+
+            glDepthMask(GL_TRUE);
+            for (u32 c = 0; c < t.colors.size(); ++c)
+                glClearBufferfv(GL_COLOR, GLint(c), &t.clearColor.x);
+            if (t.depth != invalid_handle)
+            {
+                const float one = 1.0f;
+                glClearBufferfv(GL_DEPTH, 0, &one);
+            }
+
+            firstState = true;
+            curTarget = dc.target;
+        }
 
         Material& material = materials[dc.material];
         u32 program = shaders[material.shader].handle;
@@ -828,7 +932,7 @@ void RenderMgr::flush()
             glUseProgram(program);
             curProgram = program;
         }
-        if (dc.material != curMaterial)
+        if (dc.material != curMaterial || firstState)
         {
             const Material& m = materials[dc.material];
 
@@ -841,7 +945,7 @@ void RenderMgr::flush()
                 glBindTexture(GL_TEXTURE_2D, textures[m.textures[unit]].handle);
             }
 
-            curMaterial = dc.material; // u32 curMaterial = UINT32_MAX; before the loop
+            curMaterial = dc.material; 
 
             apply_state(m.state, curState, firstState);
             firstState = false;
@@ -868,6 +972,15 @@ void RenderMgr::flush()
     }
 
     glBindVertexArray(0);
+
+    if (curTarget != invalid_handle)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(windowViewport[0], windowViewport[1], windowViewport[2], windowViewport[3]);
+    }
+    if (!dispatched)
+        run_dispatches();
+
     drawCalls.clear();
     jointStaging.clear();
 }
@@ -888,8 +1001,8 @@ RenderMgr::FormatPool& RenderMgr::get_pool(VertexFormat fmt)
 
     if (!has(fmt, VertexFormat::Position))
         throw_error("vertex format has no position");
-    if ((fmt & (VertexFormat::UV1 | VertexFormat::UV2)) != VertexFormat::None)
-        throw_error("UV1/UV2 aren't in Vertex yet");
+    if (has(fmt, VertexFormat::UV2))
+        throw_error("UV2 isn't in Vertex yet");
 
     FormatPool pool;
     pool.vertexCap = initial_vertex_cap;

@@ -20,6 +20,7 @@ target_link_libraries(game PRIVATE engine)
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${GAME_SOURCES})
 
 add_custom_target(copy_runtime
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "$<TARGET_FILE_DIR:game>/assets"
     COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/runtime_dir"
         "$<TARGET_FILE_DIR:game>"

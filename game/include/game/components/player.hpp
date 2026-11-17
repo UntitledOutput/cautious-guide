@@ -2,6 +2,8 @@
 #include "engine.hpp"
 #include "core/ecs.hpp"
 
+struct SplatGame;
+
 struct Player
 {
     float moveSpeed = 3.0f;
@@ -10,7 +12,7 @@ struct Player
     float verticalVelocity = 0.0f;
 };
 
-void update_player(Engine& engine, float delta); // camera, per frame
+void update_player(Engine& engine, SplatGame& game, float delta); // camera, per frame
 void update_player_movement(Engine& engine, float dt); // fixed tick
 
 struct PlayerCamera

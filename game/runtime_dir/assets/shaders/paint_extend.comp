@@ -1,0 +1,47 @@
+#version 450 core
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(std140) uniform Params
+{
+    int extendRadius;
+};
+
+layout(rg8) readonly uniform image2D paintTex;
+layout(rgba32f) readonly uniform image2D positionTex;
+layout(rg8) writeonly uniform image2D displayTex;
+
+void main()
+{
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(displayTex);
+    if (any(greaterThanEqual(px, size)))
+        return;
+
+    if (imageLoad(positionTex, px).w >= 0.5)
+    {
+        imageStore(displayTex, px, imageLoad(paintTex, px));
+        return;
+    }
+
+    // outside every island: copy the closest island texel so filtering doesn't bleed black
+    float best = 1e9;
+    vec4 value = vec4(0.0);
+    for (int y = -extendRadius; y <= extendRadius; ++y)
+    {
+        for (int x = -extendRadius; x <= extendRadius; ++x)
+        {
+            ivec2 q = clamp(px + ivec2(x, y), ivec2(0), size - 1);
+            if (imageLoad(positionTex, q).w < 0.5)
+                continue;
+
+            float dist = float(x * x + y * y);
+            if (dist < best)
+            {
+                best = dist;
+                value = imageLoad(paintTex, q);
+            }
+        }
+    }
+
+    imageStore(displayTex, px, value);
+}

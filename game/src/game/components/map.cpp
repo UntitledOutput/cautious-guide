@@ -7,7 +7,7 @@
 #include "core/components/hierarchy.hpp"
 #include <core/hierarchy.hpp>
 
-void setup_map(Engine& engine, ecs::Entity map) {
+void setup_map(Engine& engine, ecs::Entity map, fx::PaintMgr& paint) {
 
     var mapModelHandle = engine.models().load("assets/models/map.glb");
 
@@ -24,4 +24,18 @@ void setup_map(Engine& engine, ecs::Entity map) {
     engine.world().add<scene::Transform>(map);
 
     scene::attach(engine.world(),model,map);
+
+    engine.world().add<Map>(map).model = model;
+
+    const var& asset = engine.models().get(mapModelHandle);
+    var& paintable = engine.world().add<fx::PaintableObject>(model, paint.create_paintable(asset));
+
+    var& r = engine.renderer();
+    for (var mat : asset.materials)
+    {
+        r.set_material_param(mat, "usePaintMap", 1);
+        r.set_material_texture(mat, "paintMap", paintable.displayTexture);
+        for (int i = 0; i < 4; ++i)
+            r.set_material_param(mat, "paintColor" + std::to_string(i), paint.paintColors[i]);
+    }
 }

@@ -5,9 +5,11 @@
 #include <vector>
 #include <unordered_map>
 #include <span>
+#include <cstring>
 
 #include "camera.hpp"
 #include "texture.hpp"
+#include "render_target.hpp"
 
 namespace graphics
 {
@@ -111,7 +113,9 @@ namespace graphics
         u32 instanceCount = 1;
         BufferHandle instanceBuffer = invalid_handle;
 
-        // todo: instancing and draw order
+        RenderTargetHandle target = invalid_handle; 
+
+        
     };
 
     struct RenderConfiguration
@@ -135,7 +139,7 @@ namespace graphics
             const auto& params = shaders[m.shader].layout.params;
             auto it = params.find(std::string(name));
             if (it == params.end())
-                return; // BFRES materials carry params your shader may not use
+                return; 
             if (sizeof(T) > it->second.size)
                 throw_error("param type doesn't match the shader");
 
@@ -165,10 +169,14 @@ namespace graphics
         MeshHandle create_mesh(const MeshDescriptor& descriptor);
         TextureHandle create_texture(const TextureDescriptor& descriptor);
 
+        RenderTargetHandle create_render_target(const RenderTargetDescriptor& descriptor);
+        TextureHandle render_target_texture(RenderTargetHandle h, u32 attachment = 0) ret(targets[h].colors[attachment])
+        TextureHandle render_target_depth(RenderTargetHandle h) ret(targets[h].depth)
+
             BufferHandle create_buffer(const BufferDescriptor& descriptor);
         void update_buffer(BufferHandle h, size_t offset, std::span<const byte> data);
         void resize_buffer(BufferHandle h, size_t newSize);
-        void read_buffer(BufferHandle h, size_t offset, std::span<byte> out); // stalls the CPU; debug/tools only
+        void read_buffer(BufferHandle h, size_t offset, std::span<byte> out); 
         size_t buffer_size(BufferHandle h) const { return buffers[h].size; }
 
         ComputeShaderHandle create_compute_shader(const ComputeShaderDescriptor& descriptor);
@@ -176,7 +184,7 @@ namespace graphics
         DispatchSize groups_for(ComputeShaderHandle shader, u32 x, u32 y = 1, u32 z = 1) const;
         void set_dispatch_buffer(ComputeDispatch& d, std::string_view block, BufferHandle buffer, Access access);
         void set_dispatch_image(ComputeDispatch& d, std::string_view image, TextureHandle texture, Access access);
-        void submit_dispatch(ComputeDispatch dispatch); // runs in flush(), before draws, in submission order
+        void submit_dispatch(ComputeDispatch dispatch); 
 
         template<typename T>
         void set_dispatch_param(ComputeDispatch& d, std::string_view name, const T& value)
@@ -184,19 +192,18 @@ namespace graphics
             const auto& params = compute_shaders[d.shader].layout.params;
             auto it = params.find(std::string(name));
             if (it == params.end())
-                return; // unused params get optimized out of the block, same as materials
+                return; 
             if (sizeof(T) > it->second.size)
                 throw_error("param type doesn't match the shader");
             std::memcpy(d.params.data() + it->second.offset, &value, sizeof(T));
         }
 
 
-        void submit_dispatch(const ComputeDispatch&);
         void submit_draw_call(const DrawCall& drawCall);
 
         void screenshot(std::string filename);
 
-        void flush(); // render all draw calls and clear
+        void flush(); 
         
         TextureHandle white_texture() ret(whiteTexture);
         TextureHandle black_texture() ret(blackTexture);
@@ -258,6 +265,7 @@ namespace graphics
         std::vector<Material> materials;
         std::vector<GpuShader> shaders;
         std::vector<GpuTexture> textures;
+        std::vector<GpuRenderTarget> targets;
 
         TextureHandle whiteTexture = 0, blackTexture = 0, normalTexture = 0;
 
@@ -270,4 +278,4 @@ namespace graphics
         std::vector<byte> objectStaging;
     };
 
-} // namespace graphics
+} 

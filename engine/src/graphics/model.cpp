@@ -34,7 +34,7 @@ namespace
             Vertex& a = verts[idx[i]];
             Vertex& b = verts[idx[i + 1]];
             Vertex& c = verts[idx[i + 2]];
-            math::vec3 n = cross(b.position - a.position, c.position - a.position); // length = area weight
+            math::vec3 n = cross(b.position - a.position, c.position - a.position); 
             a.normal += n;
             b.normal += n;
             c.normal += n;
@@ -68,6 +68,13 @@ namespace
                 verts[i].uv0 = m.uvs[0][i];
         }
 
+        if (m.uvs[1].size() == n)
+        {
+            fmt |= VertexFormat::UV1;
+            for (size_t i = 0; i < n; ++i)
+                verts[i].uv1 = m.uvs[1][i];
+        }
+
         if (m.joints.size() == n)
         {
             fmt |= VertexFormat::Joints;
@@ -84,7 +91,7 @@ namespace
 
         return r.create_mesh({fmt, verts, m.indices});
     }
-} // namespace
+} 
 
 ModelHandle ModelCache::load(const std::string& path)
 {

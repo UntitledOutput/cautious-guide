@@ -41,6 +41,7 @@ struct Vertex
     math::vec3 position;
     math::vec3 normal;
     math::vec2 uv0;
+    math::vec2 uv1;
     u16 joints[4];
     math::vec4 weights;
-};
+};

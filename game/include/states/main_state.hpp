@@ -31,4 +31,5 @@ public:
     int _ballCount = 200;
     float _restitution = 0.2f;
     int _groundHits = 0;
+    int debugImage = 0;
 };

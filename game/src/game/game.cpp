@@ -56,6 +56,16 @@ void SplatGame::on_init(Engine& engine)
     currentGameState = (std::make_unique<BootState>());
 
     currentGameState->on_enter(*this, engine);
+
+    var& r = engine.renderer();
+    var& fs = engine.filesystem();
+
+    fx::PaintShaders paintShaders;
+    paintShaders.bake = r.create_shader(
+        {fs.read_file_str("assets/shaders/paint_bake.vert"), fs.read_file_str("assets/shaders/paint_bake.frag")});
+    paintShaders.splat = r.create_compute_shader({fs.read_file_str("assets/shaders/paint_splat.comp")});
+    paintShaders.extend = r.create_compute_shader({fs.read_file_str("assets/shaders/paint_extend.comp")});
+    paint = std::make_unique<fx::PaintMgr>(r, paintShaders);
 }
 
 

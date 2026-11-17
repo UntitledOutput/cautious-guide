@@ -1,62 +1,84 @@
 #version 450 core
-// #include "paint_common.glsl"
-//
-// Applies every splat that hit this object this frame in one dispatch.
-// Dispatch: ceil(w/8) x ceil(h/8) over the object's paint map.
-
 layout(local_size_x = 8, local_size_y = 8) in;
 
-struct Splat {
-    vec4 centerRadius;  // object space center, full-strength radius
-    vec4 normalFalloff; // object space hit normal, outer radius = radius * w (Unity used 5)
-    vec4 params;        // x = team, y = strength, z = noise amount 0..1
+struct Splat
+{
+    vec4 positionSize;
+    vec4 normalFalloff;
+    vec4 colorStrength;
 };
 
-layout(std430, binding = 0) readonly buffer Splats {
+layout(std430) readonly buffer Splats
+{
     Splat splats[];
 };
 
-layout(rg8, binding = 0) uniform image2D uPaint;
-layout(binding = 1) uniform sampler2D      uPositionMap;
-layout(binding = 2) uniform sampler2D      uNormalMap;
-layout(binding = 3) uniform sampler2DArray uNoise;
+layout(std140) uniform Params
+{
+    uint splatOffset;
+    uint splatCount;
+    float noiseScale;
+};
 
-uniform uint  uSplatCount;
-uniform float uNoiseScale; // 15 in the Unity version
+layout(rg8) uniform image2D paintTex;
+layout(rgba32f) readonly uniform image2D positionTex;
+layout(rgba16f) readonly uniform image2D normalTex;
+layout(rgba8) readonly uniform image2D noiseTex;
 
-void main() {
-    ivec2 px   = ivec2(gl_GlobalInvocationID.xy);
-    ivec2 size = imageSize(uPaint);
-    if (any(greaterThanEqual(px, size))) return;
+void main()
+{
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(paintTex);
+    if (any(greaterThanEqual(px, size)))
+        return;
 
-    vec4 posIsland = texelFetch(uPositionMap, px, 0);
-    if (posIsland.w < 0.5) return;
+    vec4 pos = imageLoad(positionTex, px);
+    if (pos.w < 0.5)
+        return;
 
-    vec3  pos   = posIsland.xyz;
-    vec3  n     = texelFetch(uNormalMap, px, 0).xyz;
-    vec2  uv    = (vec2(px) + 0.5) / vec2(size);
-    float noise = textureLod(uNoise, vec3(uv * uNoiseScale, 0.0), 0.0).r;
+    vec3 normal = imageLoad(normalTex, px).xyz;
+    vec2 uv = (vec2(px) + 0.5) / vec2(size);
+    float noise = imageLoad(noiseTex, ivec2(fract(uv * noiseScale) * vec2(imageSize(noiseTex)))).r;
 
-    PaintSample s = decodePaint(imageLoad(uPaint, px));
+    vec2 paint = imageLoad(paintTex, px).rg;
+    float coverage = paint.r;
+    int team = int(paint.g * 3.0 + 0.5);
     bool changed = false;
 
-    for (uint i = 0u; i < uSplatCount; ++i) {
-        Splat sp = splats[i];
+    for (uint i = splatOffset; i < splatOffset + splatCount; ++i)
+    {
+        Splat s = splats[i];
+        float radius = s.positionSize.w;
+        float outer = max(radius * s.normalFalloff.w, radius + 0.0001);
+        float d = distance(pos.xyz, s.positionSize.xyz);
+        if (d >= outer)
+            continue;
 
-        float r     = sp.centerRadius.w;
-        float outer = max(r * sp.normalFalloff.w, r + 1e-4);
-        float d     = distance(pos, sp.centerRadius.xyz);
-        if (d >= outer) continue;
+        float f = 1.0 - smoothstep(radius, outer, d);
+        f *= mix(1.0, noise, s.colorStrength.z);
+        f *= smoothstep(-0.6, -0.2, dot(normal, s.normalFalloff.xyz));
+        f *= s.colorStrength.y;
+        if (f <= 0.0)
+            continue;
 
-        float f = 1.0 - smoothstep(r, outer, d);
-        f *= mix(1.0, noise, sp.params.z);
-        f *= smoothstep(0.0, 0.3, dot(n, sp.normalFalloff.xyz)); // stops paint bleeding through thin walls
-        f *= sp.params.y;
-        if (f <= 0.0) continue;
-
-        s = applySplat(s, int(sp.params.x), f);
+        int color = int(s.colorStrength.x);
+        if (coverage <= 0.0 || team == color)
+        {
+            team = color;
+            coverage = min(1.0, coverage + f);
+        }
+        else
+        {
+            coverage -= f;
+            if (coverage < 0.0)
+            {
+                team = color;
+                coverage = min(1.0, -coverage);
+            }
+        }
         changed = true;
     }
 
-    if (changed) imageStore(uPaint, px, encodePaint(s));
+    if (changed)
+        imageStore(paintTex, px, vec4(coverage, float(team) / 3.0, 0.0, 0.0));
 }

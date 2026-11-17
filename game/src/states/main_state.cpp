@@ -134,7 +134,7 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     playerMdl = playerModel;
 
     var map = engine.world().create();
-    setup_map(engine, map);
+    setup_map(engine, map, *dynamic_cast<SplatGame&>(game).paint);
 
 
 }
@@ -216,8 +216,9 @@ void MatchScene::on_update(GameCtrl& game, Engine& engine, float delta)
         }
     }
 
+
     free_cam(engine, delta);
-    update_player(engine, delta);
+    update_player(engine, dynamic_cast<SplatGame&>(game), delta);
     graphics::update_camera(engine);
 }
 
@@ -229,23 +230,16 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
     scene::update_world_transforms(engine.world(), engine.models());
     scene::render_models(engine.world(), engine.models(), engine.renderer());
 
+    dynamic_cast<SplatGame&>(game).paint->flush(engine.world());
+
         // window 1: top-right immediate debug menu
     debug::updateDebugMenu(engine, delta);
 
     ImGui::Begin("value tweaking");
-    
-    var entity =
-        engine.world().view<ecs::Name>().find([](ecs::Entity, ecs::Name& n)
-        {
-            return n.value == "Map";
-        });
-    var& component = engine.world().get<scene::Transform>(entity);
 
-    float s = component.scale.x;
+    ImGui::DragInt("texture index", &debugImage,0.01f);
 
-    ImGui::InputFloat("scale", &s);
-
-    component.scale = math::vec3{1, 1, 1} * s;
+    ImGui::Image((ImTextureRef)debugImage,ImVec2(100,100));
 
     ImGui::End();
 }

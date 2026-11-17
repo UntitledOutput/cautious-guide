@@ -1075,6 +1075,7 @@ graphics::ModelData parse_model(bfrs::FMDL& mdl,BfresModel& model)
         mesh.normals = read_attribute<math::vec3>(vb, "_n0");
         mesh.tangents = read_attribute<math::vec4>(vb, "_t0");
         mesh.uvs[0] = read_attribute<math::vec2>(vb, "_u0");
+        mesh.uvs[1] = read_attribute<math::vec2>(vb, "_u1");
         mesh.colors = read_attribute<math::vec4>(vb, "_c0");
         mesh.material = shape.materialIndex;
 

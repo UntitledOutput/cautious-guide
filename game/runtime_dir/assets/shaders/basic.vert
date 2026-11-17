@@ -4,6 +4,7 @@ layout (location = 1) in vec3 aNormal;
 layout (location = 2) in vec2 aUV;
 layout (location = 3) in uvec4 aJoints;
 layout (location = 4) in vec4 aWeights;
+layout (location = 5) in vec2 aUV1;
 
 layout(std140) uniform Camera
 {
@@ -26,6 +27,7 @@ layout(std430, binding = 3) readonly buffer Joints
 
 out vec3 vNormal;
 out vec2 vUV;
+out vec2 vUV1;
 
 void main()
 {
@@ -40,5 +42,6 @@ void main()
 
     vNormal = mat3(m) * aNormal;
     vUV = aUV;
+    vUV1 = aUV1;
     gl_Position = viewProj * m * vec4(aPos, 1.0);
 }

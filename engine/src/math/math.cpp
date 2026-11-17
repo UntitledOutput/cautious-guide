@@ -57,6 +57,51 @@ namespace math
         return r;
     }
 
+    mat4 inverse(const mat4& m)
+    {
+        mat4 a = m;
+        mat4 r = mat4::identity();
+
+        for (int col = 0; col < 4; ++col)
+        {
+            int pivot = col;
+            for (int row = col + 1; row < 4; ++row)
+                if (std::abs(a[col][row]) > std::abs(a[col][pivot]))
+                    pivot = row;
+
+            if (std::abs(a[col][pivot]) < 1e-12f)
+                return mat4::identity(); // singular
+
+            if (pivot != col)
+                for (int k = 0; k < 4; ++k)
+                {
+                    std::swap(a[k][col], a[k][pivot]);
+                    std::swap(r[k][col], r[k][pivot]);
+                }
+
+            const float inv = 1.0f / a[col][col];
+            for (int k = 0; k < 4; ++k)
+            {
+                a[k][col] *= inv;
+                r[k][col] *= inv;
+            }
+
+            for (int row = 0; row < 4; ++row)
+            {
+                if (row == col)
+                    continue;
+                const float f = a[col][row];
+                for (int k = 0; k < 4; ++k)
+                {
+                    a[k][row] -= f * a[k][col];
+                    r[k][row] -= f * r[k][col];
+                }
+            }
+        }
+
+        return r;
+    }
+
     mat4 inverse_affine(const mat4& m)
     {
         mat4 r = mat4::identity();
