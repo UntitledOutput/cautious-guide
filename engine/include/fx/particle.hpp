@@ -4,6 +4,8 @@
 #include <graphics/render.hpp>
 #include <graphics/vertex.hpp>
 #include <core/ecs.hpp>
+#include <physics/world.hpp>
+#include <random>
 
 namespace fx
 {
@@ -28,6 +30,14 @@ namespace fx
         graphics::ShaderHandle render;
     };
 
+    struct ParticleHit {
+        ecs::Entity emitter;
+        ecs::Entity hitEntity;
+        math::vec3 position, normal;
+        math::vec4 color;
+        u8 bounce;
+    };
+
     struct ParticleEmitter {
         graphics::BufferHandle particleBuffer = graphics::invalid_handle;
         graphics::MaterialHandle material = graphics::invalid_handle;
@@ -41,16 +51,25 @@ namespace fx
         float drag = 0.5f;
 
         bool collide = false;
-        float bounce = 0.5f;
+        u32 collisionMask = ~0u;
+        float collisionRadius = 0.5f;
+        float bounce = 0.4f;
+        u8 maxBounces = 3;
+
+        std::vector<Particle> cpu;
+        std::vector<u8> cpuBounces;
         float lifetimeLoss = 0.5f;
     };
 
     class ParticleMgr {
     public:
-        ParticleMgr(graphics::RenderMgr& r, const ParticleShaderContainer& s);
+        ParticleMgr(graphics::RenderMgr& r, physics::PhysicsWorld& p, const ParticleShaderContainer& s);
         ParticleEmitter create_emitter(u32 capacity);
         void emit(ParticleEmitter& e, math::vec3 pos, math::vec3 vel, float spread, u32 count, math::vec4 color);
         void flush(ecs::World& world, float dt); // before RenderMgr::flush
+
+        std::function<void(const ParticleHit&)> onHit;
+    
     private:
         graphics::RenderMgr& renderer;
         ParticleShaderContainer shaders;
@@ -58,6 +77,13 @@ namespace fx
         std::vector<EmitRequest> emitStaging;
         graphics::MeshHandle quad;
         u32 frame = 0;
+
+        void emit_cpu(ParticleEmitter& e, const EmitRequest& r);
+        void simulate_cpu(ecs::World& w, ecs::Entity id, ParticleEmitter& e, float dt);
+
+        physics::PhysicsWorld& physics;
+        std::minstd_rand rng{1234};
+        std::vector<ParticleHit> hits;
     };
 
 

@@ -257,13 +257,13 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
     var cam = engine.world().create();
     engine.world().add<graphics::Camera>(cam);
     engine.world().add<scene::Transform>(cam);
-    engine.world().get<scene::Transform>(cam).position = {0, 1, 5};
+    engine.world().get<scene::Transform>(cam).position = {0, 5, 20};
     engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
     engine.world().add<FreeCam>(cam);
 
     var emitter = engine.world().create();
     var& pe = engine.world().add<fx::ParticleEmitter>(emitter, game_.particles->create_emitter(10000));
-    pe.size = 0.08f;
+    pe.size = 0.8f;
     pe.lifetime = 2.5f;
     pe.collide = true;
     pe.bounce = 0.5f;
