@@ -253,37 +253,55 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
     GameState::on_enter(game, engine);
 
     var& game_ = dynamic_cast<SplatGame&>(game);
-
-
     var cam = engine.world().create();
     engine.world().add<graphics::Camera>(cam);
     engine.world().add<scene::Transform>(cam);
     engine.world().get<scene::Transform>(cam).position = {0, 5, 20};
     engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
-    engine.world().add<FreeCam>(cam);
+    //engine.world().add<FreeCam>(cam);
 
     var emitter = engine.world().create();
     var& pe = engine.world().add<fx::ParticleEmitter>(emitter, game_.particles->create_emitter(10000));
     pe.size = 0.5f;
-    pe.lifetime = 10.f;
+    pe.lifetime = 60.f;
     pe.collisionMask = 1 << 0;
     pe.bounce = 0.0f;
     pe.maxBounces = 99;
     pe.collide = true;
-    pe.lifetimeLoss = 0.0f; 
+    pe.lifetimeLoss = 1.0f; 
     pe.collisionRadius = pe.size;
-    engine.world().add<InkEmitter>(emitter, {.color = 0, .splatSize = 1.5f});
+    pe.gravity = {0, -1, 0, 0};
+    engine.world().add<InkEmitter>(emitter, InkEmitter{.color = 0, .splatSize = 0.5f});
 
 
-    /*
-    var ground = engine.world().create();
-    engine.world().add<scene::Transform>(ground);
-    var& gc = engine.world().add<physics::Collider>(ground);
-    gc.shape = physics::ShapeType::AABB;
-    gc.box.halfExtents = {20, 0.5f, 20};
-    gc.offset.y = -0.5f;     // top surface at y = 0
-    gc.layer = 1 << 0;
-    */
+    var playerEntity = engine.world().create();
+    var& playerTransform = engine.world().add<scene::Transform>(playerEntity);
+    playerTransform.position.y = 10.f;
+    var& player = engine.world().add<Player>(playerEntity);
+    player.moveSpeed = 25;
+
+    var& c = engine.world().add<physics::Collider>(playerEntity);
+    c.shape = physics::ShapeType::Capsule;
+    c.capsule.radius = 3.f;
+    c.capsule.halfHeight = 4.f;
+    c.offset.y = 7.f;
+    c.layer = L_Player;
+    engine.world().add<physics::RigidBody>(playerEntity);
+    engine.world().add<physics::RigidBody>(playerEntity).type = physics::RigidBody::Type::Kinematic;
+
+    var& cc = engine.world().add<physics::CharacterController>(playerEntity);
+    cc.stepHeight = 1.5f;
+    cc.snapDistance = 1.5f;
+    cc.skin = 0.05f;
+    cc.mask = L_Ground;
+
+
+    var playerModelHandle = engine.models().load("assets/models/tofu.glb");
+    scene::Transform t{};
+    t.scale = math::vec3{1, 1, 1} * 3.0f;
+    var playerModel = scene::spawn_model(engine.world(), playerModelHandle, t);
+    scene::attach(engine.world(), playerModel, playerEntity);
+    playerMdl = playerModel;
 
     // add test area for paint testing
     var map = engine.world().create();
@@ -301,7 +319,26 @@ void DebugState::on_update(GameCtrl& game, Engine& engine, float delta)
         engine.input().toggle_mouse_captured();
 
     var& game_ = dynamic_cast<SplatGame&>(game);
-    game_.particles->emit(pe, {0, 0.01f, 0}, {0, 15, 0}, 10.0f, 40, game_.paint->paintColors[0]);
+
+    if (engine.input().key_down(SDL_SCANCODE_F))
+    {
+
+        var camera = engine.world().view<graphics::Camera>().first();
+        var position = engine.world().get<scene::Transform>(camera).position;
+        var direction = engine.world().get<scene::Transform>(camera).forward();
+
+        position += direction * 2.f;
+
+        direction *= -15.f;
+
+        engine.world().view<fx::ParticleEmitter>().each(
+            [&](ecs::Entity, fx::ParticleEmitter& pe)
+            {
+                // fountain: straight up with some spread
+                game_.particles->emit(pe, position,direction, 0.0f, 1, game_.paint->paintColors[0]);
+            });
+    }
+
 
     free_cam(engine, delta);
 

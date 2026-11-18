@@ -10,6 +10,8 @@ struct Player
     float jumpSpeed = 30.0f;
     float gravity = 80.0f;
     float verticalVelocity = 0.0f;
+
+    ecs::Entity paintEmitter;
 };
 
 void update_player(Engine& engine, SplatGame& game, float delta); // camera, per frame

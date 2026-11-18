@@ -79,6 +79,7 @@ int Engine::start(GameCtrl& game)
         _renderMgr->flush();
         _window->render_ui();
 
+        /*
         constexpr int gif_frames = 120;
         if (_frame_count < gif_frames)
             _gif->capture_frame(_window->framebuffer_width(), _window->framebuffer_height());
@@ -86,6 +87,7 @@ int Engine::start(GameCtrl& game)
             _gif->save("screenshot.gif");
             _running = false; // for the remote test, we just want to take a capture and exit
         }
+        */
         
 
         _window->present();

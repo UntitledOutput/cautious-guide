@@ -8,6 +8,8 @@
 #include "states/main_state.hpp"
 #include "states/state_base.hpp"
 #include "fx/particle.hpp"
+#include "game/components/map.hpp"
+#include "game/components/paint.hpp"
 
 static graphics::ShaderHandle defaultShader;
 
@@ -85,8 +87,8 @@ void SplatGame::on_init(Engine& engine)
         if (!ink)
             return;
 
-        if (const Map* m = w.try_get<Map>(h.entity))
-            paint->apply_paint(w.get<fx::PaintableObject>(m->model), h.point, h.normal, ink->color, ink->splatSize);
+        if (const Map* m = w.try_get<Map>(h.hitEntity))
+            paint->apply_paint(w.get<fx::PaintableObject>(m->model), h.position, h.normal, ink->color, ink->splatSize);
     };
 
 
