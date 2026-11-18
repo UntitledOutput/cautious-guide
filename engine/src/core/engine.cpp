@@ -79,7 +79,8 @@ int Engine::start(GameCtrl& game)
         _renderMgr->flush();
         _window->render_ui();
 
-        
+        std::cout << "s" << std::endl;
+
         constexpr int gif_frames = 120;
         if (_frame_count < gif_frames)
             _gif->capture_frame(_window->framebuffer_width(), _window->framebuffer_height());

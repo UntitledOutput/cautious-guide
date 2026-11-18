@@ -73,7 +73,7 @@ void SplatGame::on_init(Engine& engine)
     particleShaders.update = r.create_compute_shader({fs.read_file_str("assets/shaders/particle_update.comp")});
     particleShaders.render = r.create_shader(
         {fs.read_file_str("assets/shaders/particle.vert"), fs.read_file_str("assets/shaders/particle.frag")});
-    particles = std::make_unique<fx::ParticleMgr>(r, particleShaders);
+    particles = std::make_unique<fx::ParticleMgr>(r, engine.physics(), particleShaders);
 
 }
 

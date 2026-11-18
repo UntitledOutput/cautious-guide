@@ -265,9 +265,20 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
     var& pe = engine.world().add<fx::ParticleEmitter>(emitter, game_.particles->create_emitter(10000));
     pe.size = 0.8f;
     pe.lifetime = 2.5f;
+    pe.collisionMask = 1 << 0;
+    pe.bounce = 0.5f;
+    pe.maxBounces = 3;
     pe.collide = true;
     pe.bounce = 0.5f;
     pe.lifetimeLoss = 0.5f; 
+
+    var ground = engine.world().create();
+    engine.world().add<scene::Transform>(ground);
+    var& gc = engine.world().add<physics::Collider>(ground);
+    gc.shape = physics::ShapeType::AABB;
+    gc.box.halfExtents = {20, 0.5f, 20};
+    gc.offset.y = -0.5f;     // top surface at y = 0
+    gc.layer = 1 << 0;
 
     // add test area for paint testing
     var map = engine.world().create();
