@@ -63,10 +63,11 @@ namespace fx
 
     class ParticleMgr {
     public:
-        ParticleMgr(graphics::RenderMgr& r, physics::PhysicsWorld& p, const ParticleShaderContainer& s);
+        ParticleMgr(graphics::RenderMgr& r, const ParticleShaderContainer& s);
         ParticleEmitter create_emitter(u32 capacity);
         void emit(ParticleEmitter& e, math::vec3 pos, math::vec3 vel, float spread, u32 count, math::vec4 color);
-        void flush(ecs::World& world, float dt); // before RenderMgr::flush
+        // physics is passed per call: Engine::regen_world() replaces the PhysicsWorld on every state change
+        void flush(ecs::World& world, physics::PhysicsWorld& physicsWorld, float dt); // before RenderMgr::flush
 
         std::function<void(const ParticleHit&)> onHit;
     
@@ -81,7 +82,7 @@ namespace fx
         void emit_cpu(ParticleEmitter& e, const EmitRequest& r);
         void simulate_cpu(ecs::World& w, ecs::Entity id, ParticleEmitter& e, float dt);
 
-        physics::PhysicsWorld& physics;
+        physics::PhysicsWorld* physics = nullptr; // valid during flush only
         std::minstd_rand rng{1234};
         std::vector<ParticleHit> hits;
     };

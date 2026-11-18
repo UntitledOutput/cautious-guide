@@ -13,8 +13,8 @@ namespace fx
 
 
     
-    ParticleMgr::ParticleMgr(graphics::RenderMgr& r, physics::PhysicsWorld& p, const ParticleShaderContainer& s)
-        : renderer(r), shaders(s), physics(p)
+    ParticleMgr::ParticleMgr(graphics::RenderMgr& r, const ParticleShaderContainer& s)
+        : renderer(r), shaders(s)
     {
         const Vertex verts[] = {
             {.position = {-1, -1, 0}, .uv0 = {0, 0}},
@@ -81,8 +81,8 @@ void ParticleMgr::simulate_cpu(ecs::World& w, ecs::Entity id, ParticleEmitter& e
         {
             const math::vec3 dir = step / dist;
             const auto hit = e.collisionRadius > 0.0f
-                ? physics.sphere_cast(w, pos, e.collisionRadius, dir, dist, filter)
-                : physics.raycast(w, pos, dir, dist, filter);
+                ? physics->sphere_cast(w, pos, e.collisionRadius, dir, dist, filter)
+                : physics->raycast(w, pos, dir, dist, filter);
 
             if (hit)
             {
@@ -113,8 +113,9 @@ void ParticleMgr::simulate_cpu(ecs::World& w, ecs::Entity id, ParticleEmitter& e
         e.pending.push_back({{pos.x, pos.y, pos.z, float(count)}, {vel.x, vel.y, vel.z, spread}, color});
     }
 
-    void ParticleMgr::flush(ecs::World& world, float dt)
+    void ParticleMgr::flush(ecs::World& world, physics::PhysicsWorld& physicsWorld, float dt)
     {
+        physics = &physicsWorld;
         struct Batch { ParticleEmitter* e; u32 offset, count, total; };
         std::vector<Batch> batches;
         emitStaging.clear();

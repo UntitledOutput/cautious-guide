@@ -73,7 +73,22 @@ void SplatGame::on_init(Engine& engine)
     particleShaders.update = r.create_compute_shader({fs.read_file_str("assets/shaders/particle_update.comp")});
     particleShaders.render = r.create_shader(
         {fs.read_file_str("assets/shaders/particle.vert"), fs.read_file_str("assets/shaders/particle.frag")});
-    particles = std::make_unique<fx::ParticleMgr>(r, engine.physics(), particleShaders);
+    particles = std::make_unique<fx::ParticleMgr>(r, particleShaders);
+
+    particles->onHit = [this, &engine](const fx::ParticleHit& h)
+    {
+        if (h.bounce != 0)               // paint on first impact only
+            return;
+
+        var& w = engine.world();         // look it up each call: regen_world() replaces it
+        const InkEmitter* ink = w.try_get<InkEmitter>(h.emitter);
+        if (!ink)
+            return;
+
+        if (const Map* m = w.try_get<Map>(h.entity))
+            paint->apply_paint(w.get<fx::PaintableObject>(m->model), h.point, h.normal, ink->color, ink->splatSize);
+    };
+
 
 }
 

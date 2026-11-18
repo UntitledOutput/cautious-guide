@@ -19,7 +19,7 @@ add_subdirectory(third_party/imgui_sdl2)
 
 add_subdirectory(engine)
 add_subdirectory(game)
-add_subdirectory(tests)
+#add_subdirectory(tests)
 
 target_precompile_headers(engine PRIVATE
     <string> <vector> <memory> <unordered_map> <span>

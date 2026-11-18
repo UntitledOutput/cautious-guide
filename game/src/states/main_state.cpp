@@ -63,6 +63,7 @@ namespace
 #include <imgui.h>
 #include <random>
 #include <game/components/map.hpp>
+#include <game/components/paint.hpp>
 
 const SarcFile* get_sarc_file(Engine& engine,std::string path)
 { 
@@ -263,15 +264,18 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
 
     var emitter = engine.world().create();
     var& pe = engine.world().add<fx::ParticleEmitter>(emitter, game_.particles->create_emitter(10000));
-    pe.size = 0.8f;
-    pe.lifetime = 2.5f;
+    pe.size = 0.5f;
+    pe.lifetime = 10.f;
     pe.collisionMask = 1 << 0;
-    pe.bounce = 0.5f;
-    pe.maxBounces = 3;
+    pe.bounce = 0.0f;
+    pe.maxBounces = 99;
     pe.collide = true;
-    pe.bounce = 0.5f;
-    pe.lifetimeLoss = 0.5f; 
+    pe.lifetimeLoss = 0.0f; 
+    pe.collisionRadius = pe.size;
+    engine.world().add<InkEmitter>(emitter, {.color = 0, .splatSize = 1.5f});
 
+
+    /*
     var ground = engine.world().create();
     engine.world().add<scene::Transform>(ground);
     var& gc = engine.world().add<physics::Collider>(ground);
@@ -279,6 +283,7 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
     gc.box.halfExtents = {20, 0.5f, 20};
     gc.offset.y = -0.5f;     // top surface at y = 0
     gc.layer = 1 << 0;
+    */
 
     // add test area for paint testing
     var map = engine.world().create();
@@ -296,11 +301,7 @@ void DebugState::on_update(GameCtrl& game, Engine& engine, float delta)
         engine.input().toggle_mouse_captured();
 
     var& game_ = dynamic_cast<SplatGame&>(game);
-    engine.world().view<fx::ParticleEmitter>().each([&](ecs::Entity, fx::ParticleEmitter& pe)
-    {
-        // fountain: straight up with some spread
-        game_.particles->emit(pe, {0, 1, 0}, {0, 15, 0}, 10.0f, 40, {1.0f, 0.5f, 0.1f, 1.0f});
-    });
+    game_.particles->emit(pe, {0, 0.01f, 0}, {0, 15, 0}, 10.0f, 40, game_.paint->paintColors[0]);
 
     free_cam(engine, delta);
 
@@ -317,7 +318,9 @@ void DebugState::on_render(GameCtrl& game, Engine& engine, float delta)
     scene::render_models(engine.world(), engine.models(), engine.renderer());
 
     var& particles = *dynamic_cast<SplatGame&>(game).particles;
-    particles.flush(engine.world(), delta);
+    var& game_ = dynamic_cast<SplatGame&>(game);
+    particles.flush(engine.world(), engine.physics(), delta);
+    game_.paint->flush(engine.world());   // after: this frame's hits get painted this frame
 
     debug::updateDebugMenu(engine, delta);
 }
