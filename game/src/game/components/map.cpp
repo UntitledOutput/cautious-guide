@@ -9,10 +9,10 @@
 
 void setup_map(Engine& engine, ecs::Entity map, fx::PaintMgr& paint) {
 
-    var mapModelHandle = engine.models().load("assets/models/debug.glb");
+    var mapModelHandle = engine.models().load("assets/models/map.glb");
 
     scene::Transform gt;
-    //gt.scale *= 20;
+    gt.scale *= 20;
     //gt.rotation = math::from_euler(math::vec3{0, math::radians(180),0});
     var model = scene::spawn_model(engine.world(), mapModelHandle, gt);
 

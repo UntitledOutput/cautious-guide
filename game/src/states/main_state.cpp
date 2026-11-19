@@ -34,7 +34,7 @@ void BootState::on_enter(GameCtrl& game, Engine& engine)
     GameState::on_enter(game, engine);
 
     var splatGame = dynamic_cast<SplatGame*>(&game);
-    splatGame->load_new_state(std::make_unique<DebugState>());
+    splatGame->load_new_state(std::make_unique<MatchScene>());
 }
 
 void BootState::on_exit(GameCtrl& game, Engine& engine)
@@ -86,30 +86,53 @@ const SarcFile* get_sarc_file(Engine& engine,std::string path)
 
 static ecs::Entity playerMdl;
 
+void give_player_weapon(SplatGame& game_, Engine& engine, ecs::Entity& playerEntity)
+{
+    var emitter = engine.world().create();
+    var& pe = engine.world().add<fx::ParticleEmitter>(emitter, game_.particles->create_emitter(10000));
+    pe.size = 0.5f;
+    pe.lifetime = 60.f;
+    pe.collisionMask = 1 << 0;
+    pe.bounce = 0.0f;
+    pe.maxBounces = 99;
+    pe.collide = true;
+    pe.lifetimeLoss = 1.0f;
+    pe.collisionRadius = pe.size;
+    pe.gravity = {0, -1, 0, 0};
+    engine.world().add<InkEmitter>(emitter, InkEmitter{.color = 0, .splatSize = 0.5f});
+
+    var weaponEntity = engine.world().create();
+    var& weapon = engine.world().add<Weapon>(weaponEntity);
+    weapon.paintEmitter = emitter;
+
+    var& player = engine.world().get<Player>(playerEntity);
+    player.weapon = weaponEntity;
+}
+
 void MatchScene::on_enter(GameCtrl& game, Engine& engine)
 {
     GameState::on_enter(game, engine);
-    engine.physics().events().clear();
 
+    engine.physics().events().clear();
     engine.input().set_mouse_captured(true);
 
+    var& game_ = dynamic_cast<SplatGame&>(game);
     var cam = engine.world().create();
     engine.world().add<graphics::Camera>(cam);
+    engine.world().add<scene::Transform>(cam);
     var& playerCamera = engine.world().add<PlayerCamera>(cam);
     playerCamera.centerRadius = 30;
     playerCamera.edgeRadius = 20;
     playerCamera.yLookOffset = 10;
     playerCamera.yScale = 20;
     playerCamera.angleSensitivity = 0.15f;
-    engine.world().add<scene::Transform>(cam);
-
-
-    engine.world().get<scene::Transform>(cam).position = {5, 5, 5};
-    engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
 
     var playerEntity = engine.world().create();
     var& playerTransform = engine.world().add<scene::Transform>(playerEntity);
-    playerTransform.position.y = 10.f;
+    playerTransform.position.y = 0.1f;
+    //playerTransform.position.z = -15.f;
+
+
     var& player = engine.world().add<Player>(playerEntity);
     player.moveSpeed = 25;
 
@@ -132,12 +155,18 @@ void MatchScene::on_enter(GameCtrl& game, Engine& engine)
     var playerModelHandle = engine.models().load("assets/models/tofu.glb");
     scene::Transform t{};
     t.scale = math::vec3{1, 1, 1} * 3.0f;
+    t.rotation = math::from_euler({0, math::radians(180), 0});
     var playerModel = scene::spawn_model(engine.world(), playerModelHandle, t);
-    scene::attach(engine.world(),playerModel,playerEntity);
+
+    scene::attach(engine.world(), playerModel, playerEntity);
+    player.model = playerModel;
     playerMdl = playerModel;
 
+    give_player_weapon(game_, engine, playerEntity);
+
+    // add test area for paint testing
     var map = engine.world().create();
-    setup_map(engine, map, *dynamic_cast<SplatGame&>(game).paint);
+    setup_map(engine, map, *game_.paint);
 
 
 }
@@ -233,7 +262,11 @@ void MatchScene::on_render(GameCtrl& game, Engine& engine, float delta)
     scene::update_world_transforms(engine.world(), engine.models());
     scene::render_models(engine.world(), engine.models(), engine.renderer());
 
-    dynamic_cast<SplatGame&>(game).paint->flush(engine.world());
+    var& particles = *dynamic_cast<SplatGame&>(game).particles;
+    var& game_ = dynamic_cast<SplatGame&>(game);
+    particles.flush(engine.world(), engine.physics(), delta);
+    game_.paint->flush(engine.world()); // after: this frame's hits get painted this frame
+
 
         // window 1: top-right immediate debug menu
     debug::updateDebugMenu(engine, delta);
@@ -263,32 +296,16 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
     engine.world().get<scene::Transform>(cam).look_at({0, 7.5f, 0});
     engine.world().add<FreeCam>(cam);
 
-    var emitter = engine.world().create();
-    var& pe = engine.world().add<fx::ParticleEmitter>(emitter, game_.particles->create_emitter(10000));
-    pe.size = 0.5f;
-    pe.lifetime = 60.f;
-    pe.collisionMask = 1 << 0;
-    pe.bounce = 0.0f;
-    pe.maxBounces = 99;
-    pe.collide = true;
-    pe.lifetimeLoss = 1.0f; 
-    pe.collisionRadius = pe.size;
-    pe.gravity = {0, -1, 0, 0};
-    engine.world().add<InkEmitter>(emitter, InkEmitter{.color = 0, .splatSize = 0.5f});
-
 
     var playerEntity = engine.world().create();
     var& playerTransform = engine.world().add<scene::Transform>(playerEntity);
     playerTransform.position.y = 0.1f;
     playerTransform.position.z = -15.f;
 
-    var weaponEntity = engine.world().create();
-    var& weapon = engine.world().add<Weapon>(weaponEntity);
-    weapon.paintEmitter = emitter;
+
 
     var& player = engine.world().add<Player>(playerEntity);
     player.moveSpeed = 25;
-    player.weapon = weaponEntity;
 
     var& c = engine.world().add<physics::Collider>(playerEntity);
     c.shape = physics::ShapeType::Capsule;
@@ -315,6 +332,8 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
     scene::attach(engine.world(), playerModel, playerEntity);
     player.model = playerModel;
     playerMdl = playerModel;
+
+    give_player_weapon(game_, engine, playerEntity);
 
     // add test area for paint testing
     var map = engine.world().create();

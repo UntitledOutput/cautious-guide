@@ -51,12 +51,13 @@ int Engine::start(GameCtrl& game)
     var previousCtr = SDL_GetPerformanceCounter();
     dbl acc = 0.0;
     constexpr int gif_frames = 120;
+    constexpr bool capture_gif = false;
 
 
     while (_running)
     {
         var nowCtr = SDL_GetPerformanceCounter();
-        const bool recording = _frame_count < gif_frames;
+        const bool recording = _frame_count < gif_frames && capture_gif;
         dbl frame = recording ? _gif->frame_interval() : (nowCtr - previousCtr) / frequency;
         
         previousCtr = nowCtr;
@@ -82,11 +83,15 @@ int Engine::start(GameCtrl& game)
         _renderMgr->flush();
         _window->render_ui();
 
-        if (_frame_count < gif_frames)
-            _gif->capture_frame(_window->framebuffer_width(), _window->framebuffer_height());
-        if (_frame_count == gif_frames - 1) {
-            _gif->save("screenshot.gif");
-            _running = false; // for the remote test, we just want to take a capture and exit
+        if (capture_gif)
+        {
+            if (_frame_count < gif_frames)
+                _gif->capture_frame(_window->framebuffer_width(), _window->framebuffer_height());
+            if (_frame_count == gif_frames - 1)
+            {
+                _gif->save("screenshot.gif");
+                _running = false; // for the remote test, we just want to take a capture and exit
+            }
         }
         
 

@@ -9,6 +9,8 @@
 #include <graphics/components.hpp>
 #include <scene/transform_system.hpp>
 
+#include "game/components/paint.hpp"
+
 void update_player(Engine& engine, SplatGame& game, float deltaTime)
 {
     // camera updating
@@ -29,24 +31,6 @@ void update_player(Engine& engine, SplatGame& game, float deltaTime)
                 yV += engine.actions().axis2(engine.actions().find("look")).y;
                 _cam.yValue += (yV * _cam.ySensitivity) * deltaTime;
                 _cam.yValue = std::clamp(_cam.yValue, 0.f, 1.f);
-
-                if (engine.input().mouse_down(1))
-                {
-
-                    var& w = engine.world();
-                    var ct = w.get<scene::Transform>(e);
-                    var dir = math::rotate(ct.rotation, math::vec3{0, 0, -1});
-
-                    var hit = engine.physics().raycast(w, ct.position, dir, 500.0f, physics::CastFilter{1 << 0});
-                    // std::printf("[paint] hit=%d\n", hit.has_value());
-                    if (hit)
-                    {
-                        var* m = w.try_get<Map>(hit->entity);
-                        if (m)
-                            game.paint->apply_paint(w.get<fx::PaintableObject>(m->model), hit->point, hit->normal, 0,
-                                                    2.0f);
-                    }
-                }
             }
 
             var playerEntity = engine.world().view<Player>().first();
@@ -70,10 +54,13 @@ void update_player(Engine& engine, SplatGame& game, float deltaTime)
     engine.world().view<Weapon>().each(
         [&](ecs::Entity e, Weapon& w)
         {
-            var particleSys = engine.world().get<fx::ParticleEmitter>(w.paintEmitter);
+            var& particleSys = engine.world().get<fx::ParticleEmitter>(w.paintEmitter);
             particleSys.size = w.particleSize;
             particleSys.collisionRadius = w.particleSize * 0.5f;
             particleSys.drag = 0.0f;
+
+            var& inkEmitter = engine.world().get<InkEmitter>(w.paintEmitter);
+            inkEmitter.splatSize = particleSys.size;
         });
 
     // basic player controller
@@ -82,7 +69,8 @@ void update_player(Engine& engine, SplatGame& game, float deltaTime)
         {
             var& weapon = engine.world().get<Weapon>(p.weapon);
 
-            weapon.shoot(engine, game, e);
+            if (engine.input().mouse_down(1))
+                weapon.shoot(engine, game, e);
         });
 }
 
@@ -101,10 +89,10 @@ void update_player_movement(Engine& engine, float dt)
                 var camForward = w.get<scene::Transform>(cameraEntity).forward();
                 camForward.y = 0;
                 camForward = math::normalize(camForward);
-                wt.rotation = math::look_rotation(-camForward, math::vec3{0, 1, 0});
+                wt.rotation = math::look_rotation(camForward, math::vec3{0, 1, 0});
 
                 const var moveAxis = engine.actions().axis2(engine.actions().find("move"));
-                var move = -wt.forward() * moveAxis.y + wt.right() * moveAxis.x;
+                move = wt.forward() * moveAxis.y + -wt.right() * moveAxis.x;
                 if (math::dot(move, move) > 1.0f)
                     move = math::normalize(move); // only clamp, so half-tilted sticks stay half speed
 
@@ -155,6 +143,6 @@ void Weapon::shoot(Engine& engine, SplatGame& game, ecs::Entity& p) {
     //particleSys.gravity = {0, 0.0f, 0, 0};
     particleSys.drag = 0.0f;
     particleSys.lifetimeLoss = 1.0f;
-    game.particles->emit(particleSys, shootPos, shootVel, spread, 1, color);
+    game.particles->emit(particleSys, shootPos, shootVel, spread, shootCount, color);
 
 }
