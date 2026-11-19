@@ -8,6 +8,7 @@
 #include "graphics/model.hpp"
 #include "graphics/primitive.hpp"
 #include "physics/world.hpp"
+#include "core/components/hierarchy.hpp"
 
 namespace
 {
@@ -47,7 +48,68 @@ namespace
                 }
             });
     }
-} // namespace
+
+
+    void draw_entity_node(ecs::World& w, ecs::Entity e)
+    {
+        const ecs::Name* name = w.try_get<ecs::Name>(e);
+        const scene::Hierarchy* h = w.try_get<scene::Hierarchy>(e);
+        const bool hasChildren = h && h->firstChild != ecs::null_entity;
+
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DefaultOpen;
+        if (!hasChildren && !w.contains<scene::Transform>(e))
+            flags |= ImGuiTreeNodeFlags_Leaf;
+
+        ImGui::PushID(int(e.index));
+        const bool open = ImGui::TreeNodeEx("##node", flags, "%s  [%u:%u]%s",
+                                            name ? name->value.c_str() : "<unnamed>", e.index, e.generation,
+                                            (h && h->parentNode != UINT32_MAX) ? "  (bone)" : "");
+        if (open)
+        {
+            if (h && h->parentNode != UINT32_MAX)
+                ImGui::TextDisabled("attached to parent node %u", h->parentNode);
+
+            if (auto* t = w.try_get<scene::Transform>(e))
+            {
+                ImGui::DragFloat3("position", &t->position.x, 0.05f);
+                ImGui::DragFloat3("scale", &t->scale.x, 0.01f);
+            }
+
+            if (h)
+                for (ecs::Entity c = h->firstChild; c != ecs::null_entity;
+                     c = w.get<scene::Hierarchy>(c).nextSibling)
+                    draw_entity_node(w, c);
+
+            ImGui::TreePop();
+        }
+        ImGui::PopID();
+    }
+
+    void draw_entity_hierarchy(ecs::World& w)
+    {
+        auto is_root = [&](ecs::Entity e)
+        {
+            const scene::Hierarchy* h = w.try_get<scene::Hierarchy>(e);
+            return !h || h->parent == ecs::null_entity;
+        };
+
+        
+        
+        w.view<scene::Transform>().each([&](ecs::Entity e, scene::Transform&)
+        {
+            if (is_root(e)) draw_entity_node(w, e);
+        });
+        w.view<scene::Hierarchy>().each([&](ecs::Entity e, scene::Hierarchy&)
+        {
+            if (!w.contains<scene::Transform>(e) && is_root(e)) draw_entity_node(w, e);
+        });
+        w.view<ecs::Name>().each([&](ecs::Entity e, ecs::Name&)
+        {
+            if (!w.contains<scene::Transform>(e) && !w.contains<scene::Hierarchy>(e))
+                draw_entity_node(w, e);
+        });
+    }
+} 
 
 void debug::updateDebugMenu(Engine& engine, float)
 {
@@ -68,6 +130,10 @@ void debug::updateDebugMenu(Engine& engine, float)
     ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
     ImGui::Text("Draw Calls: %d", engine.renderer().draw_call_count());
     ImGui::Checkbox("Show Physics Debug", &showPhysicsDebug);
+
+    if (ImGui::CollapsingHeader("Entities"))
+        draw_entity_hierarchy(engine.world());
+
 
     ImGui::End();
     ImGui::PopStyleVar();

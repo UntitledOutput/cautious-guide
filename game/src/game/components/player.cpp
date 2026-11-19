@@ -6,6 +6,8 @@
 #include "debug/debug.hpp"
 #include "game/game.hpp"
 #include "game/components/map.hpp"
+#include <graphics/components.hpp>
+#include <scene/transform_system.hpp>
 
 void update_player(Engine& engine, SplatGame& game, float deltaTime)
 {
@@ -76,7 +78,9 @@ void update_player(Engine& engine, SplatGame& game, float deltaTime)
     engine.world().view<scene::Transform, Player, physics::CharacterController>().each(
         [&](ecs::Entity e, scene::Transform& wt, Player& p, physics::CharacterController& cc)
         {
-            
+            var& weapon = engine.world().get<Weapon>(p.weapon);
+
+            weapon.shoot(engine, game, e);
         });
 }
 
@@ -120,4 +124,35 @@ void update_player_movement(Engine& engine, float dt)
             const math::vec3 vel = move * p.moveSpeed + math::vec3{0, p.verticalVelocity, 0};
             engine.physics().move_character(w, e, vel * dt);
         });
+}
+
+void Weapon::shoot(Engine& engine, SplatGame& game, ecs::Entity& p) {
+
+    if (engine.time() - lastShootTime < shootCooldown)
+        return;
+    lastShootTime = engine.time();
+
+    var player = engine.world().get<Player>(p);
+    var model = engine.world().get<ModelRenderer>(player.model);
+
+    var shootBone = scene::find_node(engine.models(), model.model, "Nose");
+    var boneTransform = scene::node_world_matrix(engine.world(), engine.models(), player.model, shootBone);
+
+    var boneRot = math::rotation(boneTransform);
+    var bonePos = math::position(boneTransform);
+
+    var fwd = math::rotate(boneRot, math::vec3{0, 1, 0});
+    var playerForward = math::normalize(fwd);
+
+    var shootPos = bonePos + playerForward * 2.f;
+    var shootVel = playerForward * particleSpeed;
+    float spread = 5.0f;
+    math::vec4 color = {1, 0, 1, 1};
+
+    var& particleSys = engine.world().get<fx::ParticleEmitter>(paintEmitter);
+    //particleSys.gravity = {0, 0.0f, 0, 0};
+    particleSys.drag = 0.0f;
+    particleSys.lifetimeLoss = 1.0f;
+    game.particles->emit(particleSys, shootPos, shootVel, spread, 1, color);
+
 }

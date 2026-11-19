@@ -93,6 +93,8 @@ void ParticleMgr::simulate_cpu(ecs::World& w, ecs::Entity id, ParticleEmitter& e
                     life = 0.0f;
                 else
                     vel -= hit->normal * ((1.0f + e.bounce) * math::dot(vel, hit->normal));
+
+                life -= e.lifetimeLoss * e.lifetime;
             }
             else
                 pos += step;

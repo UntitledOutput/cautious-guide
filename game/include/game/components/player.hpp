@@ -12,16 +12,21 @@ struct Player
     float verticalVelocity = 0.0f;
 
     ecs::Entity weapon;
+    ecs::Entity model;
 };
 
 struct Weapon 
 {
-    float particleSpeed;
-    float particleSize;
+    float particleSpeed = 5.0f;
+    float particleSize = 1.0f;
+    float shootCooldown = 0.1f;
 
     ecs::Entity paintEmitter;
 
-    void shoot(Player& p);
+    void shoot(Engine& engine, SplatGame& game, ecs::Entity& p);
+
+private:
+    float lastShootTime = 0.0f;
 };
 
 void update_player(Engine& engine, SplatGame& game, float delta); // camera, per frame

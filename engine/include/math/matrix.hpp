@@ -51,6 +51,9 @@ namespace math
         return {r.x, r.y, r.z};
     }
 
+    constexpr vec3 position(const mat4& m) { return {m[3].x, m[3].y, m[3].z}; }
+    inline vec3 scale(const mat4& m) { return {length(vec3{m[0].x, m[0].y, m[0].z}), length(vec3{m[1].x, m[1].y, m[1].z}), length(vec3{m[2].x, m[2].y, m[2].z})}; }
+
     mat4 translate(vec3 t);
     mat4 scale(vec3 s);
     mat4 rotate(vec3 axis, float radians);

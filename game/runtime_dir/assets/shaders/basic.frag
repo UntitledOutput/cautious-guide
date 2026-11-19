@@ -55,7 +55,8 @@ void main()
         vec4 colors[4] = vec4[4](paintColor0, paintColor1, paintColor2, paintColor3);
         float w = fwidth(ink.x);
         albedo.rgb = mix(albedo.rgb, colors[int(ink.y)].rgb, smoothstep(INK_THRESHOLD - w, INK_THRESHOLD + w, ink.x));
+        //albedo.rgb = vec3(0.0) * ink.x;
     }
 
-    FragColor = vec4(albedo.rgb * light, albedo.a);
+    FragColor = vec4(albedo.rgb, albedo.a);
 }

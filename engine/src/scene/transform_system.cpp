@@ -46,9 +46,29 @@ namespace scene
             {
                 const Hierarchy* h = w.try_get<Hierarchy>(e);
                 if (h && h->parent != ecs::null_entity)
-                    return; // gets reached through its root
+                    return; 
 
                 propagate(w, models, e, math::mat4::identity());
             });
     }
+
+    
+    u32 find_node(const graphics::ModelCache& models, graphics::ModelHandle model, std::string_view name)
+    {
+        const auto& nodes = models.get(model).nodes;
+        for (u32 i = 0; i < nodes.size(); ++i)
+            if (nodes[i].name == name)
+                return i;
+        return UINT32_MAX;
+    }
+
+    
+    math::mat4 node_world_matrix(ecs::World& w, const graphics::ModelCache& models, ecs::Entity e, u32 node)
+    {
+        const auto* wt = w.try_get<WorldTransform>(e);
+        const math::mat4 entityWorld = wt ? wt->matrix
+                                    : (w.contains<Transform>(e) ? w.get<Transform>(e).matrix() : math::mat4::identity());
+        return entityWorld * node_matrix(w, models, e, node);
+    }
+
 }

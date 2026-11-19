@@ -259,8 +259,8 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
     var cam = engine.world().create();
     engine.world().add<graphics::Camera>(cam);
     engine.world().add<scene::Transform>(cam);
-    engine.world().get<scene::Transform>(cam).position = {30, 7.5f, 15};
-    engine.world().get<scene::Transform>(cam).look_at({0, 7.5f, 15});
+    engine.world().get<scene::Transform>(cam).position = {30, 7.5f, 0};
+    engine.world().get<scene::Transform>(cam).look_at({0, 7.5f, 0});
     engine.world().add<FreeCam>(cam);
 
     var emitter = engine.world().create();
@@ -279,13 +279,16 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
 
     var playerEntity = engine.world().create();
     var& playerTransform = engine.world().add<scene::Transform>(playerEntity);
-    playerTransform.position.y = 2.f;
+    playerTransform.position.y = 0.1f;
+    playerTransform.position.z = -15.f;
 
-    var& weapon = engine.world().add<Weapon>(playerEntity);
+    var weaponEntity = engine.world().create();
+    var& weapon = engine.world().add<Weapon>(weaponEntity);
     weapon.paintEmitter = emitter;
 
     var& player = engine.world().add<Player>(playerEntity);
     player.moveSpeed = 25;
+    player.weapon = weaponEntity;
 
     var& c = engine.world().add<physics::Collider>(playerEntity);
     c.shape = physics::ShapeType::Capsule;
@@ -306,9 +309,11 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
     var playerModelHandle = engine.models().load("assets/models/tofu.glb");
     scene::Transform t{};
     t.scale = math::vec3{1, 1, 1} * 3.0f;
+    t.rotation = math::from_euler({0, math::radians(180), 0});
     var playerModel = scene::spawn_model(engine.world(), playerModelHandle, t);
     
     scene::attach(engine.world(), playerModel, playerEntity);
+    player.model = playerModel;
     playerMdl = playerModel;
 
     // add test area for paint testing

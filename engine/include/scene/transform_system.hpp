@@ -8,4 +8,7 @@ namespace scene
     void propagate(ecs::World& w, const graphics::ModelCache& models, ecs::Entity e,
                    const math::mat4& parent_matrix);
     void update_world_transforms(ecs::World& w, const graphics::ModelCache& models);
+
+    u32 find_node(const graphics::ModelCache& models, graphics::ModelHandle model, std::string_view name);
+    math::mat4 node_world_matrix(ecs::World& w, const graphics::ModelCache& models, ecs::Entity e, u32 node);
 }

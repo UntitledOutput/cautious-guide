@@ -50,12 +50,15 @@ int Engine::start(GameCtrl& game)
     dblc frequency = double(SDL_GetPerformanceFrequency());
     var previousCtr = SDL_GetPerformanceCounter();
     dbl acc = 0.0;
+    constexpr int gif_frames = 120;
+
 
     while (_running)
     {
         var nowCtr = SDL_GetPerformanceCounter();
-        dbl frame = (nowCtr - previousCtr) / frequency;
-
+        const bool recording = _frame_count < gif_frames;
+        dbl frame = recording ? _gif->frame_interval() : (nowCtr - previousCtr) / frequency;
+        
         previousCtr = nowCtr;
         acc += std::min(frame, 0.25);
         _input->begin_frame();
@@ -79,8 +82,6 @@ int Engine::start(GameCtrl& game)
         _renderMgr->flush();
         _window->render_ui();
 
-        
-        constexpr int gif_frames = 120;
         if (_frame_count < gif_frames)
             _gif->capture_frame(_window->framebuffer_width(), _window->framebuffer_height());
         if (_frame_count == gif_frames - 1) {
@@ -91,6 +92,7 @@ int Engine::start(GameCtrl& game)
 
         _window->present();
         _frame_count++;
+        _frame_time += float(frame);
     }
 
     game.on_shutdown(*this);

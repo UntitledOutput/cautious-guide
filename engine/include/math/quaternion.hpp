@@ -61,4 +61,15 @@ inline float degrees(float rad)
     return rad * 57.29577951308232f;
 }
 
+inline math::quat rotation(const math::mat4& m)
+{
+    const math::vec3 s = math::scale(m);
+    math::mat4 r = m;
+    r[0] = r[0] * (1.0f / s.x);
+    r[1] = r[1] * (1.0f / s.y);
+    r[2] = r[2] * (1.0f / s.z);
+    return math::normalize(math::from_mat4(r));
+}
+
+
 } // namespace math

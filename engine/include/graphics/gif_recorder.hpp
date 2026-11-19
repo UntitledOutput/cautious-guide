@@ -21,6 +21,7 @@ namespace graphics
         
         void capture(double dt, int srcW, int srcH);
         void capture_frame(int srcW, int srcH);
+        double frame_interval() const { return interval; }
 
         
         void save(std::string path);

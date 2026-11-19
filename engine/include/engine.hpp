@@ -72,6 +72,8 @@ public:
     void regen_world();
 
     int frame_count() ret(_frame_count);
+    float time() ret(_frame_time);
+
     graphics::GifRecorder& gif() ret(*_gif);
 
 
@@ -108,6 +110,7 @@ private:
 
 
     int _frame_count = 0;
+    float _frame_time = 0;
     bool _running = true;
 };
 
