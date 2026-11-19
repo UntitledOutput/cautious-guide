@@ -211,7 +211,8 @@ void ParticleMgr::simulate_cpu(ecs::World& w, ecs::Entity id, ParticleEmitter& e
             }
 
             
-            renderer.submit_draw_call({.mesh = quad, .material = e.material, .model = math::mat4::identity(),
+            renderer.submit_draw_call({
+                .mesh = e.renderType == Billboard ? quad : e.mesh, .material = e.material, .model = math::mat4::identity(),
                                        .instanceCount = e.capacity, .instanceBuffer = e.particleBuffer});
         });
 

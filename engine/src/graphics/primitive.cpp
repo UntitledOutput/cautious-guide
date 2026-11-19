@@ -4584,3 +4584,9 @@ graphics::ModelHandle get_primitive(PrimitiveType primitive, Engine& engine)
             return graphics::ModelHandle{};
     }
 }
+
+graphics::MeshHandle get_primitive_mesh(PrimitiveType primitive, Engine& engine)
+{
+    var model = get_primitive(primitive, engine);
+    return model ? engine.models().get(model).parts[0].mesh : graphics::invalid_handle;
+}

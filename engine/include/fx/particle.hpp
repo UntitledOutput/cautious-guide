@@ -38,6 +38,12 @@ namespace fx
         u8 bounce;
     };
 
+    enum ParticleRenderType
+    {
+        Billboard,
+        Mesh
+    };
+
     struct ParticleEmitter {
         graphics::BufferHandle particleBuffer = graphics::invalid_handle;
         graphics::MaterialHandle material = graphics::invalid_handle;
@@ -59,6 +65,9 @@ namespace fx
         std::vector<Particle> cpu;
         std::vector<u8> cpuBounces;
         float lifetimeLoss = 0.5f;
+
+        ParticleRenderType renderType;
+        graphics::MeshHandle mesh = graphics::invalid_handle;
     };
 
     class ParticleMgr {

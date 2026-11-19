@@ -99,6 +99,8 @@ void give_player_weapon(SplatGame& game_, Engine& engine, ecs::Entity& playerEnt
     pe.lifetimeLoss = 1.0f;
     pe.collisionRadius = pe.size;
     pe.gravity = {0, -1, 0, 0};
+    pe.renderType = fx::Mesh;
+    pe.mesh = get_primitive_mesh(PrimitiveType::Sphere, engine);
     engine.world().add<InkEmitter>(emitter, InkEmitter{.color = 0, .splatSize = 0.5f});
 
     var weaponEntity = engine.world().create();

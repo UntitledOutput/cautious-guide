@@ -14,3 +14,4 @@ enum PrimitiveType
 void setup_primitives(Engine& engine);
 
 graphics::ModelHandle get_primitive(PrimitiveType primitive, Engine& engine);
+graphics::MeshHandle get_primitive_mesh(PrimitiveType primitive, Engine& engine);

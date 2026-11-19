@@ -17,7 +17,7 @@ struct Player
 
 struct Weapon 
 {
-    float particleSpeed = 5.0f;
+    float particleSpeed = 10.0f;
     float particleSize = 1.0f;
     float shootCooldown = 0.1f;
     int shootCount = 3;
