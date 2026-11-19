@@ -259,7 +259,7 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
     var cam = engine.world().create();
     engine.world().add<graphics::Camera>(cam);
     engine.world().add<scene::Transform>(cam);
-    engine.world().get<scene::Transform>(cam).position = {0, 5, 20};
+    engine.world().get<scene::Transform>(cam).position = {20, 5, 0};
     engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
     engine.world().add<FreeCam>(cam);
 
@@ -279,7 +279,7 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
 
     var playerEntity = engine.world().create();
     var& playerTransform = engine.world().add<scene::Transform>(playerEntity);
-    playerTransform.position.y = 10.f;
+    playerTransform.position.y = 2.f;
     var& player = engine.world().add<Player>(playerEntity);
     player.moveSpeed = 25;
 
