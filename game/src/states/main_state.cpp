@@ -33,7 +33,7 @@ void BootState::on_enter(GameCtrl& game, Engine& engine)
     GameState::on_enter(game, engine);
 
     var splatGame = dynamic_cast<SplatGame*>(&game);
-    splatGame->load_new_state(std::make_unique<MatchScene>());
+    splatGame->load_new_state(std::make_unique<DebugState>());
 }
 
 void BootState::on_exit(GameCtrl& game, Engine& engine)
