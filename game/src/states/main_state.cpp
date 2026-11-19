@@ -33,7 +33,7 @@ void BootState::on_enter(GameCtrl& game, Engine& engine)
     GameState::on_enter(game, engine);
 
     var splatGame = dynamic_cast<SplatGame*>(&game);
-    splatGame->load_new_state(std::make_unique<DebugState>());
+    splatGame->load_new_state(std::make_unique<MatchScene>());
 }
 
 void BootState::on_exit(GameCtrl& game, Engine& engine)
@@ -252,13 +252,15 @@ void DebugState::on_enter(GameCtrl& game, Engine& engine)
 {
     GameState::on_enter(game, engine);
 
+        engine.physics().events().clear();
+
     var& game_ = dynamic_cast<SplatGame&>(game);
     var cam = engine.world().create();
     engine.world().add<graphics::Camera>(cam);
     engine.world().add<scene::Transform>(cam);
     engine.world().get<scene::Transform>(cam).position = {0, 5, 20};
     engine.world().get<scene::Transform>(cam).look_at({0, 0, 0});
-    //engine.world().add<FreeCam>(cam);
+    engine.world().add<FreeCam>(cam);
 
     var emitter = engine.world().create();
     var& pe = engine.world().add<fx::ParticleEmitter>(emitter, game_.particles->create_emitter(10000));
@@ -341,13 +343,12 @@ void DebugState::on_update(GameCtrl& game, Engine& engine, float delta)
 
 
     free_cam(engine, delta);
-
+    update_player(engine, dynamic_cast<SplatGame&>(game), delta);
     graphics::update_camera(engine);
 }
 
 void DebugState::on_fixed_update(GameCtrl& game, Engine& engine, float delta)
-{
-}
+{ update_player_movement(engine, delta); }
 
 void DebugState::on_render(GameCtrl& game, Engine& engine, float delta)
 {
