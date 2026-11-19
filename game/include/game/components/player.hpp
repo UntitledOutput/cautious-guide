@@ -11,11 +11,22 @@ struct Player
     float gravity = 80.0f;
     float verticalVelocity = 0.0f;
 
+    ecs::Entity weapon;
+};
+
+struct Weapon 
+{
+    float particleSpeed;
+    float particleSize;
+
     ecs::Entity paintEmitter;
+
+    void shoot(Player& p);
 };
 
 void update_player(Engine& engine, SplatGame& game, float delta); // camera, per frame
 void update_player_movement(Engine& engine, float dt); // fixed tick
+
 
 struct PlayerCamera
 {

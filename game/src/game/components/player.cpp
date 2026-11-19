@@ -62,6 +62,21 @@ void update_player(Engine& engine, SplatGame& game, float deltaTime)
             offset += math::vec3{0, _cam.yValue, 0};
             wt.position = playerPosition + offset;
             wt.look_at( playerPosition + math::vec3{0, _cam.yLookOffset, 0} );
+    });
+
+    // basic player controller
+    engine.world().view<Weapon>().each(
+        [&](ecs::Entity e, Weapon& w)
+        {
+            var particleSys = engine.world().get<fx::ParticleEmitter>(w.paintEmitter);
+            particleSys.size = w.particleSize;
+        });
+
+    // basic player controller
+    engine.world().view<scene::Transform, Player, physics::CharacterController>().each(
+        [&](ecs::Entity e, scene::Transform& wt, Player& p, physics::CharacterController& cc)
+        {
+            
         });
 }
 
@@ -69,21 +84,25 @@ void update_player_movement(Engine& engine, float dt)
 {
     var& w = engine.world();
     var cameraEntity = w.view<PlayerCamera>().first();
-    if (cameraEntity == ecs::null_entity)
-        return;
+    const bool hasControl = cameraEntity != ecs::null_entity && !w.contains<FreeCam>(cameraEntity);
+
 
     w.view<scene::Transform, Player, physics::CharacterController>().each(
         [&](ecs::Entity e, scene::Transform& wt, Player& p, physics::CharacterController& cc)
         {
-            var camForward = w.get<scene::Transform>(cameraEntity).forward();
-            camForward.y = 0;
-            camForward = math::normalize(camForward);
-            wt.rotation = math::look_rotation(-camForward, math::vec3{0, 1, 0});
+            var move = math::vec3{};
+            if (hasControl) {
+                var camForward = w.get<scene::Transform>(cameraEntity).forward();
+                camForward.y = 0;
+                camForward = math::normalize(camForward);
+                wt.rotation = math::look_rotation(-camForward, math::vec3{0, 1, 0});
 
-            const var moveAxis = engine.actions().axis2(engine.actions().find("move"));
-            var move = -wt.forward() * moveAxis.y + wt.right() * moveAxis.x;
-            if (math::dot(move, move) > 1.0f)
-                move = math::normalize(move); // only clamp, so half-tilted sticks stay half speed
+                const var moveAxis = engine.actions().axis2(engine.actions().find("move"));
+                var move = -wt.forward() * moveAxis.y + wt.right() * moveAxis.x;
+                if (math::dot(move, move) > 1.0f)
+                    move = math::normalize(move); // only clamp, so half-tilted sticks stay half speed
+
+            }
 
             if (cc.grounded)
             {

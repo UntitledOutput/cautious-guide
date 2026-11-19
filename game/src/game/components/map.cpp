@@ -13,8 +13,12 @@ void setup_map(Engine& engine, ecs::Entity map, fx::PaintMgr& paint) {
 
     scene::Transform gt;
     //gt.scale *= 20;
+    //gt.rotation = math::from_euler(math::vec3{0, math::radians(180),0});
     var model = scene::spawn_model(engine.world(), mapModelHandle, gt);
 
+
+    var material = engine.renderer().create_material(graphics::ShaderHandle{0});
+    engine.renderer().set_material_param<math::vec4>(material,"baseColor", math::vec4{1.0f,0.0f,0.0f,1.0f});
 
     var& gc = engine.world().add<physics::Collider>(map);
     gc.shape = physics::ShapeType::Mesh;
@@ -24,6 +28,7 @@ void setup_map(Engine& engine, ecs::Entity map, fx::PaintMgr& paint) {
     engine.world().add<scene::Transform>(map);
 
     scene::attach(engine.world(),model,map);
+    //engine.world().get<ModelRenderer>(model).overrides.push_back(material);
 
     engine.world().add<Map>(map).model = model;
 

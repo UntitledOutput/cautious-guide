@@ -1,0 +1,8 @@
+{
+    // CMake's file API reports VS_DEBUGGER_WORKING_DIRECTORY unevaluated
+    // ("$<TARGET_FILE_DIR:game>"), which CMake Tools then passes as cwd.
+    // Override it with the launch target's actual output directory.
+    "cmake.debugConfig": {
+        "cwd": "${command:cmake.launchTargetDirectory}"
+    }
+}
