@@ -28,6 +28,7 @@ void GameState::on_enter(GameCtrl& game, Engine& engine)
 
 // boot state
 
+
 void BootState::on_enter(GameCtrl& game, Engine& engine)
 {
     GameState::on_enter(game, engine);
