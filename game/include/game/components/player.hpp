@@ -18,7 +18,7 @@ struct Player
 struct Weapon 
 {
     float particleSpeed = 5.0f;
-    float particleSize = 1.0f;
+    float particleSize = 2.0f;
     float shootCooldown = 0.1f;
 
     ecs::Entity paintEmitter;

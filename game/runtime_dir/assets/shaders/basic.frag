@@ -52,11 +52,11 @@ void main()
     if (usePaintMap != 0)
     {
         vec2 ink = sample_paint(paintMap, vUV1);
-        vec4 colors[4] = vec4[4](paintColor0, paintColor1, paintColor2, paintColor3);
+        vec4 colors[4] = vec4[4](vec4(0.8), paintColor1, paintColor2, paintColor3);
         float w = fwidth(ink.x);
         albedo.rgb = mix(albedo.rgb, colors[int(ink.y)].rgb, smoothstep(INK_THRESHOLD - w, INK_THRESHOLD + w, ink.x));
-        //albedo.rgb = vec3(0.0) * ink.x;
+        //albedo.rgb = vec3(1.0) * ink.x;
     }
 
-    FragColor = vec4(albedo.rgb, albedo.a);
+    FragColor = vec4(albedo.rgb * light, albedo.a);
 }

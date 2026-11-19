@@ -72,6 +72,8 @@ void update_player(Engine& engine, SplatGame& game, float deltaTime)
         {
             var particleSys = engine.world().get<fx::ParticleEmitter>(w.paintEmitter);
             particleSys.size = w.particleSize;
+            particleSys.collisionRadius = w.particleSize * 0.5f;
+            particleSys.drag = 0.0f;
         });
 
     // basic player controller
@@ -146,8 +148,8 @@ void Weapon::shoot(Engine& engine, SplatGame& game, ecs::Entity& p) {
 
     var shootPos = bonePos + playerForward * 2.f;
     var shootVel = playerForward * particleSpeed;
-    float spread = 5.0f;
-    math::vec4 color = {1, 0, 1, 1};
+    float spread = 2.5f;
+    math::vec4 color = math::vec4{1, 1, 1, 1} * 0.8f;
 
     var& particleSys = engine.world().get<fx::ParticleEmitter>(paintEmitter);
     //particleSys.gravity = {0, 0.0f, 0, 0};
